@@ -14,19 +14,32 @@ def get_3d_hamiltonian_average_value(samples, Q, replica_count, average_size, bi
 	It produces the average Hamiltonian of one dimension higher.
 
 	samples
-		It is a list containg the samples from the DWAVE API.
+		type: list of dictionaries of key=node_index and value in {0,1}
+		It is a list containg the samples from the DWAVE API. Basically,
+		a measurement on the DWAVE architecture is presented as a dictionary
+		where the key is a node index (a positive integer) and the value
+		is either 0 or 1. To estimate the Hamiltonian, one needs
+		replica_count times the number of Hamiltonian configurations
+		over which the average is calculated. Thus, "samples" is a
+		list of dictionaries which represent different Hamiltonian
+		configurations.
 
 	Q
+		type: dictionary with key=(positive integer, positive integer) and
+			value=double
 		It is a dict containg the weights of the Chimera graph.
 
 	replica_count
+		type: positive integer
 		It contains the number of replicas in the Hamiltonian of one dimension higher.
 
 	average_size
+		type: positive integer
 		It contains the number of configurations of the Hamiltonian of one dimension higher
 		used for extracting the value.
 
 	big_gamma, beta
+		type: doubles
 		The parameters with the signification given in the paper.
 	'''
 	i_sample = 0
@@ -113,16 +126,27 @@ def get_free_energy(average_hamiltonina, samples, replica_count, beta):
 	It calculates the free energy after the formula in the paper.
 
 	average_hamiltonina
+		type: double
 		It is the value of the average of the Hamiltonians of one dimension higher. It is
 		created by calling "get_3d_hamiltonian_average_value".
 
 	samples
-		It is created by calling the DWAVE API.
+		type: list of dictionaries of key=node_index and value in {0,1}
+		It is a list containg the samples from the DWAVE API. Basically,
+		a measurement on the DWAVE architecture is presented as a dictionary
+		where the key is a node index (a positive integer) and the value
+		is either 0 or 1. To estimate the Hamiltonian, one needs
+		replica_count times the number of Hamiltonian configurations
+		over which the average is calculated. Thus, "samples" is a
+		list of dictionaries which represent different Hamiltonian
+		configurations.
 
 	replica_count
+		type: positive integer
 		It is the number of replicas in the Hamiltonian of one dimension higher.
 
 	beta
+		type: positive integer
 		Parameter presented in the paper.
 	'''
 
@@ -159,31 +183,49 @@ def update_weights(Q_hh, Q_vh, samples, reward, future_F, current_F, visible_ite
 	learning_rate, small_gamma):
 	'''
 	Q_hh
+		type: dictionary with key=(positive integer, positive integer) and
+			value=double
 		Contains key pairs (i,j) where i < j
 
 	Q_vh
+		type: dictionary with key=(positive integer, positive integer) and
+			value=double
 		Contains key pairs (visible, hidden)
 
 	samples
-		It is created by calling the DWAVE API.
+		type: list of dictionaries of key=node_index and value in {0,1}
+		It is a list containg the samples from the DWAVE API. Basically,
+		a measurement on the DWAVE architecture is presented as a dictionary
+		where the key is a node index (a positive integer) and the value
+		is either 0 or 1. To estimate the Hamiltonian, one needs
+		replica_count times the number of Hamiltonian configurations
+		over which the average is calculated. Thus, "samples" is a
+		list of dictionaries which represent different Hamiltonian
+		configurations.
 
 	reward
+		type: integer or double
 		It is the reward that from either the Environment Network or
 		directly from MonALISA.
 
 	future_F
+		type: double
 		It is the reward the agent gets at moment t + 1.
 
 	current_F
+		type: double
 		It is the reward the agent gets at moment t.
 
 	visible_iterable
+		type: list or tuple with elements from {-1,1}
 		It is the visible units -1/1 iterable the agent uses at moment t.
 
 	learning_rate
+		type: double
 		It is the learning rate used in the TD(0) algorithm.
 
 	small_gamma
+		type: double
 		It is the discount factor used in the TD(0) algorithm.
 	'''
 	prob_dict = dict()
@@ -225,13 +267,18 @@ def create_general_Q_from(Q_hh, Q_vh, visible_iterable):
 	visible units are clamped, they are incorporated into biases.
 
 	Q_hh
-		Contains key pairs (i,j) where i < j for hidden-hidden weights.
+		type: dictionary with key=(positive integer, positive integer) and
+			value=double
+		Contains key pairs (i,j) where i < j
 
 	Q_vh
-		Contains key pairs (visible, hidden) for visible-hidden weights.
+		type: dictionary with key=(positive integer, positive integer) and
+			value=double
+		Contains key pairs (visible, hidden)
 
 	visible_iterable
-		Contains -1/1 values.
+		type: list or tuple with elements from {-1,1}
+		It is the visible units -1/1 iterable.
 	'''
 	Q = dict()
 
