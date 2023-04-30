@@ -4,27 +4,193 @@ from multiprocessing import Pool, Manager
 import pickle
 from functools import reduce
 import pickle
-import json
 import numpy as np
 from scipy import interpolate
 from functools import reduce
 import random
 import matplotlib.pyplot as plt
-from statsmodels.tsa.seasonal import seasonal_decompose
+# from statsmodels.tsa.seasonal import seasonal_decompose
+
+def get_thp_per_proc(i):
+	time_stamp_dict = dict()
+
+	for time_stamp, thp_val in\
+		filter(
+			lambda p: g_first_moment + 300000 <= p[0] <= g_last_moment,
+			map(
+				lambda e: (int(e[1]), float(e[6]),),
+				filter(
+					lambda e: len(e) == 7\
+						and g_client_name in e[2].lower()\
+						and '_OUT_freq' not in e[5]\
+						and '_IN' not in e[5],
+					map(
+						lambda line: line.split('\t'),
+						open('../remote_host/spool/'+filename_list[i],'rt').read().split('\n')
+					)
+				)
+			)
+		):
+
+		if time_stamp not in time_stamp_dict:
+			time_stamp_dict[time_stamp] = thp_val
+		else:
+			time_stamp_dict[time_stamp] += thp_val
+
+	return sorted(list(time_stamp_dict.items()))
+
+def get_throughput(first_moment, last_moment, client_name):
+	spool_dir_path = '../remote_host/spool/'
+
+	global filename_list, g_client_name, g_first_moment, g_last_moment
+
+	g_first_moment, g_last_moment, g_client_name =\
+		first_moment, last_moment, client_name
+
+	filename_list = list(
+		filter(
+			lambda e:\
+				'.done' in e\
+				and first_moment <= int(e[:-5]) < last_moment + 3600000,
+			os.listdir(spool_dir_path)
+		)
+	)
+
+	p = Pool(n_proc)
+
+	time_stamp_dict = dict()
+
+	for a_list in p.map(get_thp_per_proc, range(len(filename_list))):
+		for time_stamp, thp_val in a_list:
+			if time_stamp not in time_stamp_dict:
+				time_stamp_dict[time_stamp] = thp_val
+			else:
+				time_stamp_dict[time_stamp] += thp_val
+
+	if False:
+		a = sorted(list(time_stamp_dict.items()))
+
+		# #print(f'number of thp values is {len(a)}')
+
+		# for e in a[:10]: # print(e)
+
+		pickle.dump(
+			(
+				tuple(map(lambda e: e[0], a)),
+				tuple(map(lambda e: e[1], a))
+			),
+			open( 'for_plot.p' , 'wb' )
+		)
+
+	p.close()
+
+	return sorted(list(time_stamp_dict.items()))
 
 def generator_iterate(iterable):
-	'''
-	Helps with iteration over a generator.
-	'''
-	try:
-		return next(iterable)
-	except StopIteration:
-		return None
+    try:
+        return next(iterable)
+    except StopIteration:
+        return None
+
+def look_per_proc(fn):
+	csv_reader = csv.reader(open('apiserv-read-files/' + fn),delimiter=',')
+
+	a = next(csv_reader)
+
+	min_a = max_a = int(a[0])
+
+	a = next(csv_reader)
+
+	while a != None:
+		a = int(a[0])
+		if a < min_a: min_a = a
+		if a > max_a: max_a = a
+		a = generator_iterate(csv_reader)
+
+	return min_a, max_a
+
+def get_natural_querys():
+	csv_reader = csv.reader(open('apiserv-read-files/pcapiserv01.20191216_AM.apicommands.log'),delimiter=',')
+
+	line = next(csv_reader)
+
+	# print(line)
+
+def get_queries_per_proc(i):
+	g_a_list.extend(\
+		tuple(
+			map(
+				lambda line: (\
+					int(line[0]),
+					line[3].lower(),
+					tuple(\
+						map(
+							lambda e: tuple(e.split('::')[1:]),
+							line[4].split(';')
+						)
+					),
+					int(line[2]),
+				),
+				filter(
+					lambda line: g_client_name in line[-1],
+					map(
+						lambda line: line[:-1] + [line[-1].lower(),],
+						csv.reader(open('apiserv-read-files/' + filename_list[i]),delimiter=',')
+					)
+				)
+			)
+		)
+	)
+	if False:
+		return tuple(
+				map(
+					lambda line: (\
+						int(line[0]),
+						line[3].lower(),
+						tuple(\
+							map(
+								lambda e: tuple(e.split('::')[1:]),
+								line[4].split(';')
+							)
+						),
+						int(line[2]),
+					),
+					filter(
+						lambda line: g_client_name in line[-1],
+						map(
+							lambda line: line[:-1] + [line[-1].lower(),],
+							csv.reader(open('apiserv-read-files/' + filename_list[i]),delimiter=',')
+						)
+					)
+				)
+			)
+
+def get_natural_queries(client_name):
+	global filename_list, g_client_name, g_a_list
+
+	g_a_list = Manager().list()
+
+	g_client_name = client_name
+
+	filename_list = os.listdir('apiserv-read-files/')
+
+	p = Pool(n_proc)
+
+	# l = []
+	# for ll in p.map(get_queries_per_proc, range(len(filename_list))):
+	# 	l += ll
+	# return l
+
+	p.map(get_queries_per_proc, range(len(filename_list)))
+
+	p.close()
+	p.join()
+
+	# print('Process Pool Finished Map !')
+
+	return g_a_list
 
 def get_matrices_time_moments_lists(first_moment, last_moment):
-	'''
-	Selects the matrices which are temporally located between the 2 moments.
-	'''
 	filename_tuple = tuple(os.listdir('./remote_host/log_folder/'))
 	distance_list = list(
 		map(
@@ -66,10 +232,6 @@ def get_matrices_time_moments_lists(first_moment, last_moment):
 	return distance_list, demotion_list
 
 def get_dist_dict_by_time(time_moment):
-	'''
-	Gets a UNIX time moment. Read the distance CSV file associated with it and parse it.
-	Returns a dict: { client : { storage element : distance value } }.
-	'''
 	d = dict()
 	for cl, se, val in\
 		map(
@@ -89,10 +251,6 @@ def get_dist_dict_by_time(time_moment):
 	return d
 
 def get_dem_dict_by_time(time_moment):
-	'''
-	Gets a UNIX time moment. Read the demotion CSV file associated with it and parse it.
-	Returns a dict: { storage element : distance value }.
-	'''
 	d = dict()
 	for se, val in\
 		map(
@@ -109,9 +267,7 @@ def get_dem_dict_by_time(time_moment):
 	return d
 
 def get_matrices(first_moment, last_moment):
-	'''
-	Return pairs of time and associate dictionary for the demotion and distance matrices.
-	'''
+
 	distance_list, demotion_list = get_matrices_time_moments_lists(first_moment, last_moment)
 
 	dist_res_list = []
@@ -125,9 +281,6 @@ def get_matrices(first_moment, last_moment):
 	return dist_res_list, dem_res_list
 
 def answer_per_proc_0(i):
-	'''
-	Answers queries per on a CPU core. I launched inside a Pool of processses.
-	'''
 	ref_dict = get_dist_dict_by_time(g_dist_list[-1])
 	for k in ref_dict.keys():
 		if g_queries_list[i][1] in k:
@@ -163,9 +316,6 @@ def answer_per_proc_0(i):
 	return tuple(map(lambda p: p[1], se_list))
 
 def answer_queries_0(first_moment, last_moment,):
-	'''
-	Launches pool of processes for query answering.
-	'''
 	global g_queries_list, g_dist_list, g_dem_list
 	g_queries_list = list(pickle.load(open('unanswered_cern_queries.p','rb')))
 	g_dist_list, g_dem_list = get_matrices_time_moments_lists(first_moment, last_moment)
@@ -173,7 +323,7 @@ def answer_queries_0(first_moment, last_moment,):
 	aaa = 0
 
 	i = 0
-	for order_list in Pool(n_proc).map(answer_per_proc_0, range(len(g_queries_list))):
+	for order_list in Pool(n_proc).map(answer_per_proc, range(len(g_queries_list))):
 
 		if aaa < 100:
 			print(g_queries_list[i])
@@ -201,9 +351,6 @@ def answer_queries_0(first_moment, last_moment,):
 	)
 
 def answer_per_proc_1(i):
-	'''
-	Answers queries per on a CPU core. I launched inside a Pool of processses.
-	'''
 	ref_dict = g_dist_list[-1][1]
 	for k in ref_dict.keys():
 		if g_queries_list[i][1] in k:
@@ -239,9 +386,6 @@ def answer_per_proc_1(i):
 	return tuple(map(lambda p: p[1], se_list))
 
 def answer_queries_1(first_moment, last_moment, query_window=100000):
-	'''
-	Launches pool of processes for query answering.
-	'''
 	global g_dist_list, g_dem_list, g_queries_list
 
 	number_of_queries = len(pickle.load(open('unanswered_cern_queries.p','rb')))
@@ -310,10 +454,6 @@ def answer_queries_1(first_moment, last_moment, query_window=100000):
 	)
 
 def associate_per_proc(i):
-	'''
-	Associates queries to a throughput value per CPU core. Works inside a
-	pool of processes.
-	'''
 	g_dict[g_thp_list[i]] =\
 	list(
 		filter(
@@ -323,9 +463,6 @@ def associate_per_proc(i):
 	)
 
 def associate_queries(first_moment, last_moment, client_name, query_window=120000):
-	'''
-	Launches a pool of processes for associating queries to throughput values.
-	'''
 	global g_queries_list, g_thp_list, g_dict
 
 	# g_thp_list = get_throughput(first_moment, last_moment, client_name)
@@ -390,10 +527,6 @@ def associate_queries(first_moment, last_moment, client_name, query_window=12000
 	)
 
 def associate_per_proc_1(i):
-	'''
-	Associates queries to a throughput value per CPU core. Works inside a
-	pool of processes.
-	'''
 	g_dict[g_thp_list[i]] =\
 	list(
 		filter(
@@ -403,9 +536,6 @@ def associate_per_proc_1(i):
 	)
 
 def associate_queries_1(first_moment, last_moment, client_name, query_window=12000):
-	'''
-	Launches a pool of processes for associating queries to throughput values.
-	'''
 	global g_queries_list, g_thp_list, g_dict, g_st, g_fi
 
 	# g_thp_list = get_throughput(first_moment, last_moment, client_name)
@@ -477,11 +607,147 @@ def associate_queries_1(first_moment, last_moment, client_name, query_window=120
 		open('queries_throughput_dict.p', 'wb')
 	)
 
+def normalize_and_onehot_dataset():
+	g_queries_dict = pickle.load(open('queries_throughput_dict.p','rb'))
+
+	min_q_time, max_q_time = 9576450800000, -1
+
+	min_read, max_read = 9576450800000, -1
+
+	min_thp, max_thp = 9576450800000, -1
+
+	min_t_time, max_t_time = 9576450800000, -1
+
+	cl_dict = dict()
+
+	se_dict = dict()
+
+	next_cl_index, next_se_index = 0, 0
+
+	for k in g_queries_dict.keys():
+		if k[0] < min_t_time: min_t_time = k[0]
+		if k[0] > max_t_time: max_t_time = k[0]
+		if k[1] < min_thp: min_thp = k[1]
+		if k[1] > max_thp: max_thp = k[1]
+
+		for q_list in g_queries_dict[k]:
+			if q_list[0] < min_q_time: min_q_time = q_list[0]
+			if q_list[0] > max_q_time: max_q_time = q_list[0]
+			if q_list[-1] < min_read: min_read = q_list[-1]
+			if q_list[-1] > max_read: max_read = q_list[-1]
+
+			if q_list[1] not in cl_dict:
+				cl_dict[q_list[1]] = next_cl_index
+				next_cl_index += 1
+
+			for se in q_list[2]:
+				if se not in se_dict:
+					se_dict[se] = next_se_index
+					next_se_index += 1
+
+	print("encoding lenght for clients: " + str(next_cl_index))
+	print("encoding lenght for SEs: " + str(next_se_index))
+
+	# pickle.dump(
+	# 	(cl_dict, se_dict,),
+	# 	open('mappings/real.p', 'wb')
+	# )
+
+	q_time_dif = max_q_time - min_q_time
+	read_dif = max_read - min_read
+	t_time_dif = max_t_time - min_t_time
+	thp_dif = max_thp - min_thp
+
+	new_key_dict = dict()
+
+	for k in g_queries_dict.keys():
+		for i in range(len(g_queries_dict[k])):
+			g_queries_dict[k][i] = (\
+				2 * (g_queries_dict[k][i][0] - min_q_time) / q_time_dif - 1,
+				g_queries_dict[k][i][1],
+				g_queries_dict[k][i][2],
+				2 * (g_queries_dict[k][i][3] - min_read) / read_dif - 1,
+			)
+
+		new_key_dict[k] = (
+			2 * (k[0] - min_t_time) / t_time_dif - 1,
+			(k[1] - min_thp) / thp_dif
+		)
+
+	print(len(list(new_key_dict.keys())))
+
+	for k in new_key_dict.keys():
+		g_queries_dict[new_key_dict[k]] = g_queries_dict[k]
+		del g_queries_dict[k]
+
+	pickle.dump(
+		g_queries_dict,
+		open('normalized_queries_throughput_dict.p','wb')
+	)
+
+	pickle.dump(
+		g_queries_dict,
+		open('first_option_cern.p', 'wb',)
+	)
+
+def test_data_set():
+	queries_dict = pickle.load(open('normalized_queries_throughput_dict.p','rb'))
+
+	#print(f'Number of thp values: {len(tuple(queries_dict.keys()))}')
+
+	#print(f'throughput time: {min(queries_dict.keys(), key=lambda p: p[0])[0]} {max(queries_dict.keys(), key=lambda p: p[0])[0]}')
+
+	#print(f'throughput value: {min(queries_dict.keys(), key=lambda p: p[1])[1]} {max(queries_dict.keys(), key=lambda p: p[1])[1]}')
+
+	#print(f'max q per thp: {max(map(lambda k: len(queries_dict[k]) , queries_dict.keys()))}')
+
+	#print(f'min q per thp: {min(map(lambda k: len(queries_dict[k]) , queries_dict.keys()))}')
+
+	c = 0
+	t = 0
+
+	for k in queries_dict.keys():
+		t += len(queries_dict[k])
+		c += len(tuple(filter(lambda e: 'cern' in e[1], queries_dict[k])))
+
+	#print(f'local q: {c}/{t}')
+	#print(f'remote q: {t-c}/{t}')
+
+	print('\nAfter filtering !')
+
+	for k in queries_dict.keys():
+		queries_dict[k] = list(
+			filter(
+				lambda e: 'cern' in e[2][0][0],
+				queries_dict[k]
+			)
+		)
+	#print(f'Number of thp values: {len(tuple(queries_dict.keys()))}')
+
+	#print(f'throughput time: {min(queries_dict.keys(), key=lambda p: p[0])[0]} {max(queries_dict.keys(), key=lambda p: p[0])[0]}')
+
+	#print(f'throughput value: {min(queries_dict.keys(), key=lambda p: p[1])[1]} {max(queries_dict.keys(), key=lambda p: p[1])[1]}')
+
+	#print(f'max q per thp: {max(map(lambda k: len(queries_dict[k]) , queries_dict.keys()))}')
+
+	#print(f'min q per thp: {min(map(lambda k: len(queries_dict[k]) , queries_dict.keys()))}')
+
+	c = 0
+	t = 0
+
+	for k in queries_dict.keys():
+		t += len(queries_dict[k])
+		c += len(tuple(filter(lambda e: 'cern' in e[1], queries_dict[k])))
+
+	#print(f'local q: {c}/{t}')
+	#print(f'remote q: {t-c}/{t}')
+
+	pickle.dump(
+		queries_dict,
+		open('first_option_cern.p', 'wb',)
+	)
+
 def assign_interpolated_thp():
-	'''
-	Assigns throughput to queries individually by querying an interpolated throughput
-	function.
-	'''
 	thp_list = pickle.load(open('throughput_dump.p', 'rb'))
 
 	thp_func = interpolate.interp1d(
@@ -514,16 +780,9 @@ def assign_interpolated_thp():
 	)
 
 def get_thp_per_proc_1(i):
-	'''
-	Used to query interpolation function in parallel.
-	'''
 	return g_thp_func(g_queries_list[i][0])
 
 def assign_interpolated_thp_in_parallel():
-	'''
-	Assigns throughput to queries individually by querying an interpolated throughput
-	function.
-	'''
 	global g_thp_func,g_queries_list
 
 	thp_list = pickle.load(open('throughput_dump.p', 'rb'))
@@ -552,9 +811,6 @@ def assign_interpolated_thp_in_parallel():
 	)
 
 def normalize_q_t_list():
-	'''
-	Normalizes the queries-throughput structure.
-	'''
 	queries_list = pickle.load(open('queries_throughput_list.p', 'rb'))
 
 	min_q_time, max_q_time = 9576450800000, -1
@@ -655,9 +911,6 @@ def generate_new_data_set():
 	)
 
 def verify_per_proc(i):
-	'''
-	Validates a data set per CPU core inside a pool of processes.
-	'''
 	for q_list in g_answered_q_list:
 		if q_list[0] == g_sub_q_list[i][0]\
 			and q_list[1] == g_sub_q_list[i][1]\
@@ -682,9 +935,6 @@ def verify_per_proc(i):
 						break
 
 def verify_query_answering(queries_to_verify_count=1000):
-	'''
-	Randomly check some queries.
-	'''
 	global g_sub_q_list, g_answered_q_list, g_v, g_lock
 
 	unansw_q_list = pickle.load(open('unanswered_cern_queries.p','rb'))
@@ -702,7 +952,7 @@ def verify_query_answering(queries_to_verify_count=1000):
 
 	m = Manager()
 
-	g_v = m.value('i', 0)
+	g_v = m.Value('i', 0)
 
 	g_lock = m.Lock()
 
@@ -740,10 +990,32 @@ def verify_query_answering(queries_to_verify_count=1000):
 
 	print(g_v)
 
+def plot_dependency():
+	X = pickle.load(open('data_set_array_1.p','rb'))
+
+	plt.plot(
+		range(X.shape[0]),
+		X[:,0],
+		'b+',
+		label='read size'
+	)
+
+	plt.plot(
+		range(X.shape[0]),
+		2 * X[:,1] - 1,
+		'r+',
+		label='throughput'
+	)
+
+	plt.legend()
+
+	plt.xlabel('Index in the Data Set')
+
+	plt.ylabel('Normalized Values')
+
+	plt.show()
+
 def get_thp_bin_per_proc(i):
-	'''
-	Old binning per proc.
-	'''
 	thp_bins_list = [0 for _ in range(g_bins_no)]
 
 	for q_time, q_read_size in filter(\
@@ -779,10 +1051,7 @@ def get_five_minute_binned_dataset(
 	first_moment,
 	millis_interval_start=4000000,
 	millis_interval_end=0,
-	number_of_bins_per_thp=1000):
-	'''
-	Old binning main.
-	'''
+	number_of_bins_per_thp=2000):
 	global g_queries_list, g_thp_list, g_dict, g_bin_length_in_time, g_bins_no, g_s, g_f
 
 	g_bin_length_in_time = (millis_interval_start - millis_interval_end) / number_of_bins_per_thp
@@ -832,13 +1101,12 @@ def get_five_minute_binned_dataset(
 
 		exit(0)
 
-	if True:
-		g_thp_list = tuple(
-			filter(
-				lambda t: t[0] >= first_moment + millis_interval_start,
-				pickle.load(open('throughput_dump.p','rb'))
-			)
+	g_thp_list = tuple(
+		filter(
+			lambda t: t[0] >= first_moment + millis_interval_start,
+			pickle.load(open('throughput_dump.p','rb'))
 		)
+	)
 
 	print('There are ' + str(len(g_thp_list)) + ' throughput values.')
 
@@ -858,10 +1126,6 @@ def get_five_minute_binned_dataset(
 	)
 
 def normalize_five_minute_bins():
-	'''
-	Normalize bins from dumped file.
-	Normalizes PER FEATURE.
-	'''
 	query_dict = pickle.load(open('binned_thp_queries_dict.p','rb'))
 
 	min_vec = [9576450800000 for _ in range(len(tuple(query_dict.values())[0]))]
@@ -921,10 +1185,6 @@ def normalize_five_minute_bins():
 	)
 
 def normalize_five_minute_bins_1():
-	'''
-	Normalize bins from dumped file.
-	Normalizes GLOBALLY.
-	'''
 	query_dict = pickle.load(open('binned_thp_queries_dict.p','rb'))
 	min_bin_rs, max_bin_rs = 9576450800000, -1
 
@@ -957,11 +1217,63 @@ def normalize_five_minute_bins_1():
 		open('normalized_binned_thp_queries_array.p','wb')
 	)
 
+def analyse_0():
+	# b_dict = pickle.load( open( 'write_queries_throughput_dict.p' , 'rb' ) )
+	b_dict = pickle.load( open( 'queries_throughput_dict.p' , 'rb' ) )
+
+	a_dict = dict()
+
+	b_list = list()
+
+	for k,value in b_dict.items():
+
+		a_dict[k] = 0
+
+		for q_list in value:
+
+			a_dict[k] += q_list[-1]
+
+		b_list.append(k)
+
+	lim = 800
+
+	key_list = sorted( a_dict.keys() )[:lim]
+
+	t = tuple(map(lambda k: a_dict[k], key_list))[:lim]
+
+	plt.plot(
+		range(len(key_list)),
+		tuple(map(lambda e: (e-min(t)) / (max(t)-min(t)),t))
+	)
+
+	b_list = sorted(b_list)[:lim]
+
+	c_list = tuple(
+		map(
+			lambda e: e[1],
+			b_list
+		)
+	)
+
+	plt.plot(
+		range(len(key_list)),
+		tuple(map(lambda e: (e-min(c_list)) / (max(c_list)-min(c_list)),c_list))
+	)
+
+	print(len(key_list))
+
+	# prev_val = key_list[0][0]
+
+	# for i in range(1,len(key_list)):
+
+	# 	if key_list[i][0] - prev_val > 300000:
+	# 		prev_val = key_list[i][0]
+
+	# 		plt.plot([i,i],[0,1])
+
+	plt.savefig('test.png', dpi=300)
+
 def analyse_1():
-	'''
-	Generates data for plotting on reas size, number of queries and
-	throughput.
-	'''
 	read_values_dict = dict()
 	q_no_per_time_dict = dict()
 	for q_list in filter(
@@ -1033,10 +1345,6 @@ def analyse_1():
 	)
 
 def analyse_2():
-	'''
-	Plot data on read size, number of queries and
-	throughput.
-	'''
 	a,b,c,d ,e,f= pickle.load(open('pipe.p','rb'))
 
 	plt.plot(
@@ -1069,17 +1377,12 @@ def analyse_2():
 
 	plt.xlabel('Time in minutes')
 
-	plt.ylabel('Normalized values')
+	plt.ylabel('Normalized Values')
 
 	plt.show()
 
-def split_indexes(\
-		X,\
-		output_fn='first_week_train_test_indexes_split.p'\
-	):
-	'''
-	Dump train/test split indexes.
-	'''
+def split_indexes():
+	X = pickle.load(open('normalized_binned_thp_queries_array.p','rb'))
 
 	granularity = 0.1
 
@@ -1151,13 +1454,28 @@ def split_indexes(\
 
 	pickle.dump(
 		(train_indexes_list, valid_indexes_list,),
-		open(output_fn, 'wb')
+		open('train_test_indexes_split.p', 'wb')
 	)
 
+def analyse_exponential_decay():
+	read_dict = dict()
+
+	for t, v in pickle.load(open('queries_throughput_list.p', 'rb')):
+		if t not in read_dict:
+			read_dict[t] = v
+		else:
+			read_dict[t] += v
+
+	min_v, max_v = min(read_dict.values()), max(read_dict.values())
+
+	min_t, max_t = min(read_dict.keys()), max(read_dict.keys())
+
+	keys_list = tuple(read_dict.keys())
+
+	for k in keys_list:
+		pass
+
 def analyse_3():
-	'''
-	Analyse ratios.
-	'''
 	a_list = pickle.load(open('answered_cern_queries.p','rb'))
 
 	a =\
@@ -1197,311 +1515,155 @@ def analyse_3():
 	print('\tratio: ' + str(a/c))
 	print()
 
-def timseseries_analyse_0(thp_dump_list = pickle.load(open('thp_dump_list.p', 'rb'))):
-	'''
-	Time series analysis.
-	'''
-	from statsmodels.tsa.seasonal import seasonal_decompose
-	import matplotlib.ticker as ticker
+def analyse_4():
+	a,b,c,d ,e,f= pickle.load(open('pipe.p','rb'))
 
-	x_list, y_list = list(), list()
+	# plt.plot(
+	# 	a,
+	# 	b,
+	# )
 
-	if False:
-		prev = thp_dump_list[0][0]
-
-		time_c = (thp_dump_list[1][0] - thp_dump_list[0][0])/1000
-
-		read_size = thp_dump_list[0][1] * (thp_dump_list[1][0] - thp_dump_list[0][0])/1000
-
-		for i in range(2,len(thp_dump_list)):
-
-			time_c += (thp_dump_list[i][0] - thp_dump_list[i-1][0])/1000
-
-			read_size += thp_dump_list[i-1][1] * (thp_dump_list[i][0] - thp_dump_list[i-1][0])/1000
-
-			if thp_dump_list[i][0] - prev >= 1.9 * 60 * 1000:
-
-				x_list.append( prev )
-				y_list.append( read_size / time_c )
-
-				x_list.append( thp_dump_list[i][0] )
-				y_list.append( read_size / time_c )
-
-				prev = thp_dump_list[i][0]
-				time_c, read_size = 0,0
-		x_list = tuple( map( lambda e: (e - 1576450800000) / 60000, x_list) )
-		min_a,max_a = min(y_list),max(y_list)
-		y_list = tuple( map( lambda e: (e - min_a)/(max_a-min_a), y_list) )
-
-	if False:
-		y_list =\
-		tuple(
-			map(
-				lambda e: e[1],
-				pickle.load(open('thp_dump_list.p', 'rb'))
-			)
-		)
-		x_list =\
-		tuple(
-			map(
-				lambda e: e[0],
-				pickle.load(open('thp_dump_list.p', 'rb'))
-			)
-		)
-		x_list =\
-		tuple(
-			map(
-				lambda e: e[0]/1000,
-				pickle.load(open('thp_dump_list.p', 'rb'))
-			)
-		)
-
-	if True:
-		y_list =\
-		tuple(
-			map(
-				lambda e: e[1],
-				thp_dump_list
-			)
-		)
-		x_list =\
-		tuple(
-			map(
-				lambda e: e[0]/1000,
-				thp_dump_list
-			)
-		)
-
-	import pandas as pd
-
-	dfObj = pd.DataFrame(columns=['Time', 'value',])
-	for i in range(len(x_list)):
-		dfObj = dfObj.append({'Time': x_list[i], 'value': y_list[i]}, ignore_index=True)
-
-	dfObj.reset_index(inplace=True)
-
-	dfObj['Time'] = pd.to_datetime(dfObj['Time'],unit='s')
-
-	print(dfObj.head())
-
-	result = seasonal_decompose(
-		dfObj.value.interpolate(),
-		model='additive',
-		freq=720
+	plt.plot(
+		e,
+		f,
+		label='throughput from MonALISA client'
 	)
 
-	if False:
-		pickle.dump(
-			tuple(
-				filter(
-					lambda e: str(e[1]) != 'nan',
-					zip(
-						map(lambda e: 1000 * e,x_list),
-						result.trend
-					)
-				)
-			),
-			open('january_month_throughput_trend.p','wb')
-		)
-		exit(0)
-
-	if True:
-		pickle.dump(
-			tuple(
-				map(
-					lambda e: (e[0], e[1:]),
-					filter(
-						lambda e: str(e[1]) != 'nan' and str(e[2]) != 'nan' and str(e[3]) != 'nan' ,
-						zip(
-							map(lambda e: 1000 * e,x_list),
-							result.trend,
-							result.seasonal,
-							result.resid,
-						)
-					)
-				)
-			),
-			open('january_month_throughput_trend_seasonal_noise.p','wb')
-		)
-		exit(0)
-
-	if True:
-		x_list =\
-		tuple(
+	a_list = tuple(
+		filter(
+			lambda e: 1576450800000 <= e[0] * 1000 <= 1576537200000,
 			map(
-				lambda e: e/3600,
-				x_list
+				lambda line: ( int( line[0] ) , float( line[1] ) , ) ,
+				csv.reader(open('from_web_thp.csv'),delimiter=',')
 			)
 		)
+	)
 
+	min_thp, max_thp =\
+		min(map(lambda e: e[1], a_list)),\
+		max(map(lambda e: e[1], a_list))
+
+	x = tuple( tuple(map(lambda e: ( e[0] - 1576450800 ) / 60, a_list)) )
+
+	print('min difference between values: '\
+		+ str(
+			min(map(lambda i: x[i] - x[i-1], range(1,len(x))))
+		)
+	)
+
+	plt.plot(
+		x,
+		tuple(map(lambda e: ( e[1] - min_thp ) / ( max_thp - min_thp ), a_list)),
+		label='throughput from web link'
+	)
+
+	plt.legend()
+
+	plt.xlabel('Time in minutes')
+
+	plt.ylabel('Normalized Values')
+
+	plt.show()
+
+def timseseries_analyse_0():
+	a,b,c,d,e,f= pickle.load(open('pipe.p','rb'))
+
+	if False:
+		thp_array = np.empty((len(f), 2,))
+		for i in range(len(f)):
+			thp_array[i,0] = e[i]
+			thp_array[i,1] = f[i]
+
+	f = f[:365]
+
+	result = seasonal_decompose(f, model='multiplicative', freq=1)
 	# print(result.trend)
 	# print(result.seasonal)
 	# print(result.resid)
 	# print(result.observed)
 
-	# f = open('./to_send/throughput.csv','wt')
-	# f.write( 'Time_Stamp_In_Seconds,Original_Throughput,Trend,Seasonality,Noise\n' )
-	# for i in range(len(x_list)):
-	# 	f.write(
-	# 		str(x_list[i]) + ','\
-	# 		+ str(y_list[i]) + ','\
-	# 		+ str(result.trend[i]) + ','\
-	# 		+ str(result.seasonal[i]) + ','\
-	# 		+ str(result.resid[i]) + '\n'
-	# 	)
-	# f.close()
+	plt.subplot(411)
+	plt.plot(range(len(f)),result.observed,)
 
-	import matplotlib
-	font = {'family' : 'normal',
-	        'weight' : 'bold',
-	        'size'   : 22}
-	matplotlib.rc('font', **font)
+	plt.subplot(412)
+	plt.plot(range(len(f)),result.trend,)
 
-	min_a=min(x_list)
-	x_list = list( map( lambda e: e - min_a , x_list ) )
+	plt.subplot(413)
+	plt.plot(range(len(f)),result.seasonal,)
 
-	if False:
-		ax=plt.subplot(411)
-		# plt.plot(range(len(y_list)),result.observed,'bo')
-		ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-		ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-		plt.plot(x_list,result.observed,label='Throughput')
-		time = 0
-		while time - 24 < x_list[-1]:
-			plt.plot(
-				(time,time),
-				(min(result.observed),max(result.observed)),
-				'r-'
-			)
-			time+=24
-		# plt.xlabel('Time in hours')
-		plt.ylabel('MB/s')
-		plt.legend()
+	plt.subplot(414)
+	plt.plot(range(len(f)),result.resid,)
 
-		ax=plt.subplot(412)
-		# plt.plot(range(len(y_list)),result.trend,'bo')
-		ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-		ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-		plt.plot(x_list,result.trend,label='Trend')
-		min_a = min(filter(lambda e: str(e) != 'nan',result.trend))
-		max_a = max(filter(lambda e: str(e) != 'nan',result.trend))
-		time = 0
-		while time - 24 < x_list[-1]:
-			plt.plot(
-				(time,time),
-				(min_a,max_a),
-				'r-'
-			)
-			time+=24
-		# plt.xlabel('Time in hours')
-		plt.ylabel('MB/s')
-		plt.legend()
+	plt.show()
 
-		ax=plt.subplot(413)
-		# plt.plot(range(len(y_list)),result.seasonal,'bo')
-		ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-		ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-		plt.plot(x_list,result.seasonal,label='Seasonal')
-		time = 0
-		while time - 24 < x_list[-1]:
-			plt.plot(
-				(time,time),
-				(min(result.seasonal),max(result.seasonal)),
-				'r-'
-			)
-			time+=24
-		# plt.xlabel('Time in hours')
-		plt.ylabel('MB/s')
-		plt.legend()
+def get_thp_per_proc_1(i):
+	time_stamp_dict = dict()
 
-		ax=plt.subplot(414)
-		# plt.plot(range(len(y_list)),result.resid,'bo')
-		ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-		ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-		plt.plot(x_list,result.resid,label='Noise')
-		min_a = min(filter(lambda e: str(e) != 'nan',result.resid))
-		max_a = max(filter(lambda e: str(e) != 'nan',result.resid))
-		time = 0
-		while time - 24 < x_list[-1]:
-			plt.plot(
-				(time,time),
-				(min_a,max_a),
-				'r-'
-			)
-			time+=24
-		plt.xlabel('Time in hours')
-		plt.ylabel('MB/s')
-		plt.legend()
-
-		plt.show()
-		plt.clf()
-
-	# 	label='throughput'
-	# )
-
-	# plt.legend()
-
-	# plt.xlabel('Index in the Data Set')
-
-	# plt.ylabel('Normalized values')
-
-	# plt.show()
-
-	if True:
-		def plot_f(x, y, min_a, max_a, name):
-			_, ax = plt.subplots()
-			ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-			ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-			ax.plot(
-				x,
-				y,
-				label=name
-			)
-			time = 0
-			while time - 24 < x_list[-1]:
-				ax.plot(
-					(time,time),
-					(min_a,max_a),
-					'r-'
+	for time_stamp, comming_from_name, thp_val in\
+		filter(
+			lambda p: g_first_moment + 300000 <= p[0] <= g_last_moment,
+			map(
+				lambda e: (int(e[1]), e[5].split('_OUT')[0].lower(), float(e[6]),),
+				filter(
+					lambda e: len(e) == 7\
+						and g_client_name in e[2].lower()\
+						and '_OUT_freq' not in e[5]\
+						and '_IN' not in e[5],
+					map(
+						lambda line: line.split('\t'),
+						open('../remote_host/spool/'+filename_list[i],'rt').read().split('\n')
+					)
 				)
-				time+=24
-			plt.xlabel('Time in hours')
-			plt.ylabel('MB/s')
-			plt.legend()
-			plt.show()
-			plt.clf()
+			)
+		):
 
-		# plot_f(
-		# 	x_list,
-		# 	result.observed,
-		# 	min(result.observed),
-		# 	max(result.observed),
-		# 	'Throughput'
-		# )
+		if time_stamp not in time_stamp_dict:
+			time_stamp_dict[time_stamp] = { comming_from_name : thp_val }
+		else:
+			time_stamp_dict[time_stamp][comming_from_name] = thp_val
 
-		# plot_f(
-		# 	x_list,
-		# 	result.trend,
-		# 	min(filter(lambda e: str(e) != 'nan',result.trend)),
-		# 	max(filter(lambda e: str(e) != 'nan',result.trend)),
-		# 	'Trend'
-		# )
+	return time_stamp_dict
 
-		# plot_f(
-		# 	x_list,
-		# 	result.seasonal,
-		# 	min(result.seasonal),
-		# 	max(result.seasonal),
-		# 	'Seasonal'
-		# )
+def get_throughput_1(first_moment, last_moment, client_name):
+	spool_dir_path = '../remote_host/spool/'
 
-		plot_f(
-			x_list,
-			result.resid,
-			min(filter(lambda e: str(e) != 'nan',result.resid)),
-			max(filter(lambda e: str(e) != 'nan',result.resid)),
-			'Noise'
+	global filename_list, g_client_name, g_first_moment, g_last_moment
+
+	g_first_moment, g_last_moment, g_client_name =\
+		first_moment, last_moment, client_name
+
+	filename_list = list(
+		filter(
+			lambda e:\
+				'.done' in e\
+				and first_moment <= int(e[:-5]) < last_moment + 3600000,
+			os.listdir(spool_dir_path)
 		)
+	)
+
+	p = Pool(n_proc)
+
+	time_stamp_dict = dict()
+
+	clients_set = set()
+
+	for a_dict in p.map(get_thp_per_proc, range(len(filename_list))):
+		for time_stamp, ts_dict in a_dict.items():
+			if time_stamp not in time_stamp_dict:
+				time_stamp_dict[time_stamp] = ts_dict
+			else:
+				for comming_from_name, thp_val in ts_dict.items():
+					time_stamp_dict[time_stamp][comming_from_name] = thp_val
+			clients_set.update(ts_dict.keys())
+
+	p.close()
+
+	for comming_from_name in clients_set:
+		for ts_dict in time_stamp_dict.values():
+			if comming_from_name not in ts_dict:
+				ts_dict[comming_from_name] = 0
+
+	return sorted(list(time_stamp_dict.items()))
 
 def generate_average_plots():
 	if False:
@@ -1555,7 +1717,25 @@ if __name__ == '__main__':
 	first_moment, last_moment = 1576450800000, 1576537200000
 
 	global n_proc
-	n_proc = 95
+	n_proc = 63
+
+	if False:
+		a_list = Pool(15).map(look_per_proc, os.listdir('apiserv-read-files'))
+		# # print(a_list)
+		# print(min(map(lambda e:e[0], a_list)))
+		# print(max(map(lambda e:e[1], a_list)))
+
+	if False:
+		for _ in range(100):
+			a = get_throughput_0(first_moment, last_moment, 'cern')
+		# # print(len(a))
+
+	if False:
+		# # print('total is ' + str(len(get_natural_queries('cern'))))
+		pickle.dump(
+			get_natural_queries('cern'),
+			open('unanswered_cern_queries.p', 'wb')
+		)
 
 	if False:
 		dist, dem = get_matrices(first_moment, last_moment)
@@ -1572,8 +1752,14 @@ if __name__ == '__main__':
 		associate_queries_1(first_moment, last_moment, 'cern')
 
 	if False:
+		normalize_and_onehot_dataset()
+
+	if False:
+		test_data_set()
+
+	if False:
 		pickle.dump(
-			get_thp_per_proc_1(first_moment, last_moment, 'cern'),
+			get_throughput(first_moment, last_moment, 'cern'),
 			open('five_minute_throughput_dump.p', 'wb')
 		)
 
@@ -1590,6 +1776,9 @@ if __name__ == '__main__':
 		verify_query_answering()
 
 	if False:
+		plot_dependency()
+
+	if False:
 		get_five_minute_binned_dataset(first_moment)
 
 	if False:
@@ -1599,29 +1788,19 @@ if __name__ == '__main__':
 		analyse_2()
 
 	if False:
+		split_indexes()
+
+	if False:
 		analyse_3()
 
-	if True:
-		timseseries_analyse_0(
-			tuple(
-				filter(
-					lambda p: p[0] >= 1578960000000,
-					map(
-						lambda p: (int(p[0])*1000, float(p[1]),),
-						tuple(
-							csv.reader(
-								open(
-									'january_month_throughput.csv','rt'
-								)
-							)
-						)[1:]
-					)
-				)
-			)
-		)
+	if False:
+		timseseries_analyse_0()
 
 	if False:
 		normalize_five_minute_bins_1()
 
 	if False:
+		analyse_4()
+
+	if True:
 		generate_average_plots()

@@ -17,9 +17,6 @@ import itertools
 from pca_utils import *
 import sys
 
-'''
-Hardcoded file paths
-'''
 MATRIXES_FOLDER_LIST = (\
 	'./remote_host_0/log_folder/',\
 	'./remote_host_1/log_folder/',\
@@ -48,9 +45,6 @@ RAW_QUERY_FILES = (\
 )
 
 def create_folder_and_copy_files():
-	'''
-	Used to copy some files
-	'''
 	folder_path = '/home/mircea/cern_log_folder/remote_host/log_folder/'
 
 	os.mkdir('./remote_host_0/')
@@ -377,6 +371,23 @@ def get_pca_of_the_matrices():
 	'''
 	week_0_list, week_1_list, week_2_list = pickle.load(open('whole_matrices.p','rb'))
 
+	if False:
+		c = list(map(lambda e: e[1], week_0_list))\
+				+ list(map(lambda e: e[1], week_1_list))\
+				+ list(map(lambda e: e[1], week_2_list))
+
+		l_0 = len(c[0])
+
+		i = 0
+		for plm in c:
+			if len(plm) != l_0:
+				print(
+					str(i) + ' '\
+					+ str(l_0) + ' '\
+					+ str(plm))
+				exit(0)
+			i+=1
+
 	if True:
 		output_file = 'time_tags_and_top_80_pca_components.p'
 
@@ -461,10 +472,6 @@ def get_pca_of_the_matrices():
 	)
 
 def get_read_size_per_proc(i):
-	'''
-	Creates a dictionary with the read size per time moment information on
-	a single core.
-	'''
 	d = dict()
 	for tm , _ , _ , rs in json.load(open(filename_list[i][1],'rt')):
 		if tm in d:
@@ -474,10 +481,6 @@ def get_read_size_per_proc(i):
 	return (filename_list[i][0],d,)
 
 def get_read_size_per_time_moment_for_cern():
-	'''
-	Creates a dictionary with the read size per time moment information for
-	the 3 weeks.
-	'''
 	global filename_list
 	filename_list = list(
 		itertools.chain.from_iterable(
@@ -685,10 +688,7 @@ def generate_throughput_trend_train():
 	)
 
 def normalize_and_split_data_set(data_set_file,time_window):
-	'''
-	Normalizes and splits the data set into training and validations sets
-	while preserving the same value distribution in the 2 sets
-	'''
+
 	bins_list = get_normalized_values_per_week(data_set_file)
 
 	indexes_dict = {
@@ -897,10 +897,6 @@ def get_model_1(ws, bins_no, small_net_flag, lstm_at_end):
 	return keras.models.Model(inputs=inp_layer, outputs=x)
 
 def train_main():
-	'''
-	Runs a single configuration fitting process.3
-	'''
-
 	def get_model_2(ws, bins_no):
 		inp_layer = keras.layers.Input(shape=(ws, bins_no,))
 
@@ -1176,11 +1172,6 @@ def train_main():
 	# result_3.p: [13.21034426138444, 0.04825518]
 
 def get_dataset_for_dense_net(data_set_file):
-	'''
-	Creates the training/validation data sets
-	for training a fully-connected artificial
-	neural network.
-	'''
 	examples_list = tuple(
 
 		itertools.chain.from_iterable(
@@ -1215,9 +1206,6 @@ def get_dataset_for_dense_net(data_set_file):
 		np.array(y_valid_iterable)
 
 def train_main_0(data_set_file):
-	'''
-	Trains a fully-connected neural network.
-	'''
 	X_train_iterable, y_train_iterable, X_valid_iterable, y_valid_iterable\
 		=get_dataset_for_dense_net(data_set_file)
 
@@ -1256,10 +1244,7 @@ def train_main_0(data_set_file):
 	)
 
 def get_results_0(data_set_file,best_model_path):
-	'''
-	Returns the loss value and prediction values on a
-	data set.
-	'''
+
 	model = keras.models.load_model( best_model_path )
 
 	predict_list = list()
@@ -1459,10 +1444,6 @@ def fit_model_1(model, model_fit_dict):
 	)
 
 def nn_train_per_proc(i):
-	'''
-	Trains a neural network configuration on a GPU. It works inside a
-	pool of processes.
-	'''
 	model_create_f, create_dict, model_fit_f, fit_dict = pool_arguments_list[i]
 
 	gpu_string = proc_q.get()
@@ -1486,9 +1467,6 @@ def nn_train_per_proc(i):
 	proc_q.put(gpu_string)
 
 def get_lr_decay_arguments_pool(new_index):
-	'''
-	Produces a set of configurations for the architecture.
-	'''
 	epochs_speis = 10
 
 	pool_arguments_list = list()
@@ -1537,9 +1515,6 @@ def get_lr_decay_arguments_pool(new_index):
 	return pool_arguments_list
 
 def get_overlap_parameters(new_index):
-	'''
-	Produces a set of configurations for the architecture.
-	'''
 	pool_arguments_list = list()
 
 	for overlap in range(6):
@@ -1583,9 +1558,6 @@ def get_overlap_parameters(new_index):
 	return pool_arguments_list
 
 def get_lr_vs_bs_parameters(new_index, data_set_name='normal_set'):
-	'''
-	Produces a set of configurations for the architecture.
-	'''
 	pool_arguments_list = list()
 
 	for l_r in (0.004, 0.001, 0.0004 ):
@@ -1662,9 +1634,7 @@ def get_lr_vs_bs_parameters_1(
 	learning_rate_list=[],
 	batch_size_list=[],
 	already_trained_list=[]):
-	'''
-	Produces a set of configurations for the architecture.
-	'''
+
 	pool_arguments_list = list()
 
 	for l_r in learning_rate_list:
@@ -1754,11 +1724,6 @@ def get_lr_vs_bs_parameters_1(
 	return pool_arguments_list, new_index
 
 def hyper_parameters_sweep_train():
-	'''
-	Implements the hyperparameter grid search through the
-	neural network configurations.
-	'''
-
 	# range: 284 - 293
 	# range: 293 - 302
 	# range: 306 - 315
@@ -1785,7 +1750,7 @@ def hyper_parameters_sweep_train():
 
 	global data_set_dict, pool_arguments_list, proc_q
 
-	# start: Produce data set
+# start: Produce data set
 	data_set_dict = dict()
 
 	if False:
@@ -1824,11 +1789,11 @@ def hyper_parameters_sweep_train():
 			transform_array_only_last(data_set_dict['4th_june'][3]),
 		)
 
-	# end: Produce data set
+# end: Produce data set
 
 	index_copy = new_index
 
-	# start: Produce arguments
+# start: Produce arguments
 	pool_arguments_list = list()
 
 	already_trained = (
@@ -1893,9 +1858,9 @@ def hyper_parameters_sweep_train():
 
 	print('\n\n\n\n\nlast index: ' + str(new_index) + '\n\n\n\n\n')
 
-	# end: Produce arguments
+# end: Produce arguments
 
-	# start: Dump data_sets
+# start: Dump data_sets
 	# if dump_data_sets_flag:
 	if False:
 		for data_set_label, ds in data_set_dict.items():
@@ -1925,7 +1890,7 @@ def hyper_parameters_sweep_train():
 
 			data_set_index += 1
 
-	#end: Dump data_sets
+#end: Dump data_sets
 
 	with open('pca_what_is_what.txt', 'wt') as myfile:
 		for _, content in sorted( map(
@@ -1959,9 +1924,6 @@ Cache_Element = namedtuple(
 )
 
 def set_up_windowed_data_set(bins_list, time_window, max_overlap_length=39):
-	'''
-	Sets up a time sequence data set.
-	'''
 	x_iterables_list = list()
 	y_iterables_list = list()
 	for b_list in bins_list:
@@ -1994,10 +1956,6 @@ def set_up_windowed_data_set(bins_list, time_window, max_overlap_length=39):
 	return x_iterables_list , y_iterables_list
 
 def aggregate_arrays(x_iterables_list, y_iterables_list):
-	'''
-	Puts together arrays from the 3 weeks of data. Can work with any number
-	of weeks.
-	'''
 	x_array = np.empty( (
 		sum(map( lambda arr: arr.shape[0] , x_iterables_list )),
 		x_iterables_list[0].shape[1],
@@ -2021,9 +1979,6 @@ def aggregate_arrays(x_iterables_list, y_iterables_list):
 	return x_array, y_array
 
 def get_best_valid_index_model(index):
-	'''
-	DEPRECATED
-	'''
 	dumped_models_set = set(\
 		map(
 				lambda fn: int( fn[6:10] ),
@@ -2065,9 +2020,6 @@ def get_best_valid_index_model(index):
 	return best_valid_model_and_loss
 
 def get_models_name_on_index(index):
-	'''
-	Returns model name based on an input index.
-	'''
 	if index < 10:
 		return 'model_000' + str(index) + '.hdf5'
 	if index < 100:
@@ -2077,18 +2029,6 @@ def get_models_name_on_index(index):
 	return 'model_' + str(index) + '.hdf5'
 
 def reorder_valid_in_temporal_order(all_x,all_y,v_x,v_y):
-	'''
-	Reorders the validation data set in temporal order.
-
-	all_x,all_y
-		Numpy arrays containing all the data points from both
-		the training and validation data sets in temporal order.
-
-	v_x,v_y
-		Numpy arrays containing the data points from a subset of
-		the whole data set what will be rearranged in the original
-		temporal order
-	'''
 	indexes_list = list()
 
 	for i in range( v_x.shape[0] ):
@@ -2117,10 +2057,6 @@ def reorder_valid_in_temporal_order(all_x,all_y,v_x,v_y):
 	return new_x, new_y, return_list
 
 def aggregate_arrays_0(x_iterable, y_iterable):
-	'''
-	Creates 2 numpy arrays merging the data from the input
-	variables which contain it per week.
-	'''
 	a_x = np.copy(
 		x_iterable[0]
 	)
@@ -2141,10 +2077,6 @@ def aggregate_arrays_0(x_iterable, y_iterable):
 	return a_x, a_y
 
 def dump_nn_results(aaaaa):
-	'''
-	Task function for a pool of processes. Evaluates the performance
-	and infers based on a model that has already been trained.
-	'''
 	data_set_file, gpu_string, limits = aaaaa
 
 	dir_list = os.listdir('pca_multiple_model_folders/')
@@ -2395,11 +2327,6 @@ def dump_nn_results(aaaaa):
 					print()
 
 def dump_nn_results_0(gpu_string):
-	'''
-	Task function for a pool of processes. Evaluates the performance
-	and infers based on a model that has already been trained.
-	'''
-
 	# with tf.device(gpu_string):
 	# 	# with tf.compat.v1.Session() as sess:
 	# 	with tf.Session() as sess:
@@ -2553,14 +2480,11 @@ def dump_nn_results_0(gpu_string):
 					)
 				)
 
-def dump_results_main():
-	'''
-	Implements the main function that evaluates and infers based on models
-	that already have been trained. It does that in parallel by using
-	multiple GPUs.
-	'''
+# dump_nn_results_0('/gpu:1')
+# exit(0)
 
-	# Start: Set Up Dictionaries
+def dump_results_main():
+# Start: Set Up Dictionaries
 	index_to_valid_dict,index_to_x_y_per_week_dict,x_y_per_week_dict,valid_set_dict,\
 		x_y_whole_dict = dict(), dict(), dict(), dict(), dict()
 
@@ -2576,6 +2500,37 @@ def dump_results_main():
 		# best RNN with relu: 242
 		# best RNN with sigmoid: 283
 
+		# x_y_per_week_dict[ 'only_dense' ] =\
+		# 	(
+		# 		list(
+		# 			map(
+		# 				lambda b_list:
+		# 					np.array(
+		# 						list(
+		# 							map(
+		# 								lambda ex: ex[:-1],
+		# 								b_list
+		# 							)
+		# 						)
+		# 					),
+		# 				bins_list
+		# 			)
+		# 		),
+		# 		list(
+		# 			map(
+		# 				lambda b_list:
+		# 					np.array(
+		# 						list(
+		# 							map(
+		# 								lambda ex: [ ex[-1] , ],
+		# 								b_list
+		# 							)
+		# 						)
+		# 					),
+		# 				bins_list
+		# 			)
+		# 		)
+		# 	)
 		x_y_per_week_dict[ 'overlap_39' ] =\
 			set_up_windowed_data_set(
 				bins_list,
@@ -2653,7 +2608,7 @@ def dump_results_main():
 
 		index_to_x_y_per_week_dict.update( index_to_valid_dict )
 
-	# End: Set Up Dictionaries
+# End: Set Up Dictionaries
 
 	global index_data_set_dict
 
@@ -2673,11 +2628,11 @@ def dump_results_main():
 
 	print('\n\n\nFinished preparing data !\n\n\n')
 
-	# Start: Set up of available GPUs
+# Start: Set up of available GPUs
 
 	gpu_tuple = ('/gpu:2',)
 
-	# End: Set up of available GPUS
+# End: Set up of available GPUS
 	global gpu_task_dict
 
 	gpu_task_dict = dict()
@@ -2697,12 +2652,7 @@ def dump_results_main():
 	)
 
 def analyse_data_set():
-	'''
-	Looks into differences in time and number of elements between
-	consecutive logged whole matrices. Difference in number of elements in
-	the whole (distance + demotion) matrices is due to the fact that storage
-	elemnts may be added or removed from the Grid.
-	'''
+
 	matrices_per_week_lists = pickle.load(open('./pca_dumps/whole_matrices.p','rb'))
 
 	# print(matrices_per_week_lists[0][0])
@@ -2716,6 +2666,34 @@ def analyse_data_set():
 	)
 
 	print( len(matrices_per_week_lists[0][0]) )
+
+	# reporting_time_diffs_per_week, cell_diffs_per_week =\
+	# 	list(), list()
+
+	# for ii,matrix_week in enumerate(matrices_per_week_lists):
+
+	# 	time_diff_list = list()
+	# 	cells_diff = list()
+
+	# 	for i in range( 1 , len(matrix_week) ):
+
+	# 		if WEEK_TIME_MOMENTS[ii][0] <= matrix_week[i][0] < WEEK_TIME_MOMENTS[ii][1]:
+
+	# 			time_diff_list.append(
+	# 				matrix_week[i][0] - matrix_week[i-1][0]
+	# 			)
+
+	# 			cells_diff.append(0)
+
+	# 			for p in zip( matrix_week[i][1] , matrix_week[i-1][1] ):
+	# 				if p[0] != p[1]:
+	# 					cells_diff[-1] += 1
+
+	# 	print('Finished week !')
+
+	# 	reporting_time_diffs_per_week.append( time_diff_list )
+
+	# 	cell_diffs_per_week.append( cells_diff )
 
 	reporting_time_diffs_per_week, cell_diffs_per_week=\
 	tuple(
@@ -2811,9 +2789,6 @@ def test_generator():
 	print( np.all(b == y_train[2:4] ))
 
 def dump_pca_info_for_plot():
-	'''
-	Does principal component analysis.
-	'''
 	week_0_list, week_1_list, week_2_list = pickle.load(open('./pca_dumps/whole_matrices.p','rb'))
 
 	pca_train_array = np.array(
@@ -2908,9 +2883,6 @@ def transform_to_csv():
 			file.write( str(t[1]) + '\n' )
 
 def train_main_1():
-	'''
-	Does single configuration train.
-	'''
 	# new_index = 283
 	#	recurrent network with sigmoid activation and LeakyReLU internal
 
@@ -3268,9 +3240,6 @@ def test_reordering():
 	print( len( indexes_list ) )
 
 def get_differences_in_matrices():
-	'''
-	Get number of matrix files per week.
-	'''
 	week_list_dirs =\
 	tuple(
 		map(

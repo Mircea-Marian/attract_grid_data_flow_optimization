@@ -4,11 +4,6 @@ from sys import argv
 from csv import reader
 import traceback
 
-'''
-File contains a monitoring tool for the grid search. It reads from
-what the Keras CSVLogger callback writes to disk.
-'''
-
 losses_set = set( listdir( './pca_csv_folder/' ) )
 
 models_folder_set = set( listdir( './pca_multiple_model_folders/' ) )

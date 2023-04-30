@@ -8,15 +8,10 @@ import pickle
 from scipy import interpolate
 from functools import reduce
 import random
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # from statsmodels.tsa.seasonal import seasonal_decompose
-import csv
 
 def analyse_thp_0():
-	'''
-	Returns some statistics about the throughput from the
-	throughput csv files.
-	'''
 	thp_list = pickle.load(open('cern_throughput_per_site_list.p','rb'))
 
 	min_clients = 2000
@@ -62,10 +57,6 @@ def analyse_thp_0():
 	print(max_count)
 
 def analyse_thp_1():
-	'''
-	Plots read size per time moment. The 'pipe_3.p' should
-	contain an iterable of pairs like: (time moment,read size).
-	'''
 	cern_rs_list = pickle.load(open('pipe_3.p','rb'))
 
 	min_v, max_v =\
@@ -124,9 +115,6 @@ def analyse_thp_1():
 	plt.show()
 
 def analyse_q_emitted_by_cern_0():
-	'''
-	Extracts CERN related throughput values per time moment.
-	'''
 	q_dict = dict()
 	for ts, thp in map(
 			lambda e: (e[0],e[-1],),
@@ -146,9 +134,6 @@ def analyse_q_emitted_by_cern_0():
 	)
 
 def analyse_q_emitted_by_cern_1():
-	'''
-	Prints all the available SEs.
-	'''
 	s = set()
 	for first_option in map(
 		lambda e: e[2][0],
@@ -160,9 +145,6 @@ def analyse_q_emitted_by_cern_1():
 		print(se)
 
 def get_thp_per_proc_2(i):
-	'''
-	Agregates throughput per spool file.
-	'''
 	g_return_list.extend(
 		tuple(
 			filter(
@@ -176,7 +158,7 @@ def get_thp_per_proc_2(i):
 							and '_IN' not in e[5],
 						map(
 							lambda line: line.split('\t'),
-							open('../remote_host/spool/'+filename_list[i],'rt').read().split('\n')
+							open('./remote_host/spool/'+filename_list[i],'rt').read().split('\n')
 						)
 					)
 				)
@@ -185,18 +167,7 @@ def get_thp_per_proc_2(i):
 	)
 
 def get_throughput_2(first_moment, last_moment, client_name):
-	'''
-	In the spool directory, the MonALISA local agent logs multiple files. This
-	function extracts the throughput between a time interval from those files
-	in parallel.
-
-	first_moment, last_moment
-		Integers defining the interval
-
-	client_name
-		String that defines the name of a client of queries
-	'''
-	spool_dir_path = '../remote_host/spool/'
+	spool_dir_path = './remote_host/spool/'
 
 	global filename_list, g_client_name, g_first_moment, g_last_moment,\
 		g_return_list
@@ -251,14 +222,6 @@ def get_throughput_2(first_moment, last_moment, client_name):
 	)
 
 def get_thp_dump_based_on_interp(first_moment,last_moment):
-	'''
-	DEPRECATED
-
-	The throughput is supposed to be reported at 2 minutes interval. However,
-	if the throughput value does not change from one point in time to the next,
-	then MonALISA does not log the same value multiple times. This function
-	attempts to interpolate for the "missing" throughput values which is incorrect.
-	'''
 	interp_func_dict = list()
 	for from_name,thp_list in pickle.load(open('cern_site_thp_list_dict.p','rb')).items():
 		interp_func_dict.append(
@@ -290,9 +253,6 @@ def get_thp_dump_based_on_interp(first_moment,last_moment):
 	)
 
 def analyse_thp_2():
-	'''
-	Agregates multiple quantities and dumps them.
-	'''
 	read_size_list = pickle.load(open('first_option_cern_only_read_size.p','rb'))
 
 	prev = read_size_list[0][0]
@@ -367,7 +327,7 @@ def write_to_csv(filename, x_iterable, y_iterable, x_name, y_name):
 		file_handle.write( str(x) + ',' + str(y) + '\n' )
 
 def analyse_thp_3():
-	a,b,c,d, _,_ = pickle.load(open('pipe_1.p','rb'))
+	a,b,c,d = pickle.load(open('pipe_1.p','rb'))
 
 	a=tuple(map(lambda e: (e - 1576450800000) / 60000, a))
 
@@ -402,158 +362,54 @@ def analyse_thp_3():
 
 	h = tuple(map(lambda e: ( e - min_a ) / ( max_a - min_a ) , h))
 
-	# write_to_csv(
-	# 	'read_size.csv',
-	# 	a,
-	# 	b,
-	# 	'time_in_minutes',
-	# 	'normalized_value',
-	# )
-	# write_to_csv(
-	# 	'old_throughput.csv',
-	# 	e,
-	# 	f,
-	# 	'time_in_minutes',
-	# 	'normalized_value',
-	# )
-	# write_to_csv(
-	# 	'new_throughput.csv',
-	# 	c,
-	# 	d,
-	# 	'time_in_minutes',
-	# 	'normalized_value',
-	# )
-	# write_to_csv(
-	# 	'throughput_from_site.csv',
-	# 	g,
-	# 	h,
-	# 	'time_in_minutes',
-	# 	'normalized_value',
-	# )
-
-	plt.plot(a,b,label='read size')
-	plt.plot(e,f,label='old throughput')
-	plt.plot(c,d,label='new throughput')
-	plt.plot(g,h,label='throughput from site')
-	plt.xlabel('Time in minutes')
-	plt.ylabel('Normalized values')
-	plt.legend()
-	plt.show()
-
-def analyse_thp_4():
-	x_list, y_list = list(), list()
-
-	thp_dump_list = pickle.load(open('thp_dump_list.p', 'rb'))
-
-	prev = thp_dump_list[0][0]
-
-	time_c = (thp_dump_list[1][0] - thp_dump_list[0][0])/1000
-
-	read_size = thp_dump_list[0][1] * (thp_dump_list[1][0] - thp_dump_list[0][0])/1000
-
-	for i in range(2,len(thp_dump_list)):
-
-		time_c += (thp_dump_list[i][0] - thp_dump_list[i-1][0])/1000
-
-		read_size += thp_dump_list[i-1][1] * (thp_dump_list[i][0] - thp_dump_list[i-1][0])/1000
-
-		if thp_dump_list[i][0] - prev >= 1.9 * 60 * 1000:
-
-			x_list.append( prev )
-			y_list.append( read_size / time_c )
-
-			x_list.append( thp_dump_list[i][0] )
-			y_list.append( read_size / time_c )
-
-			prev = thp_dump_list[i][0]
-			time_c, read_size = 0,0
-
-	x_list = tuple( map( lambda e: (e - min(x_list)) / 60000, x_list) )
-	min_a,max_a = min(y_list),max(y_list)
-	print((min_a,max_a))
-	y_list = tuple( map( lambda e: (e - min_a)/(max_a-min_a), y_list) )
-
-	_,_,_,_,a,b = pickle.load(open('pipe_1.p','rb'))
-
-
-	# plt.plot(
-	# 	tuple(map(lambda e: (e - 1576450800000) / 60000,a)),
-	# 	b,
-	# 	label='read size'
-	# )
-	plt.plot(
-		x_list,
-		y_list,
-		label='new throughput'
-	)
-
 	write_to_csv(
-		'third_feb_read_size.csv',
-		tuple(map(lambda e: (e - 1576450800000) / 60000,a)),
+		'read_size.csv',
+		a,
 		b,
 		'time_in_minutes',
 		'normalized_value',
 	)
 	write_to_csv(
-		'third_feb_old_throughput.csv',
-		x_list,
-		y_list,
+		'old_throughput.csv',
+		e,
+		f,
+		'time_in_minutes',
+		'normalized_value',
+	)
+	write_to_csv(
+		'new_throughput.csv',
+		c,
+		d,
+		'time_in_minutes',
+		'normalized_value',
+	)
+	write_to_csv(
+		'throughput_from_site.csv',
+		g,
+		h,
 		'time_in_minutes',
 		'normalized_value',
 	)
 
-	plt.xlabel('Time in minutes')
-	plt.ylabel('Normalized values')
-	plt.legend()
-	plt.show()
-
-def plot_throughputs():
-	import matplotlib
-	def extract_lists(filename):
-		old_generator = csv.reader(open(filename,'rt'))
-		next(old_generator)
-		old_x_list, old_y_list = list(), list()
-		for x, y in old_generator:
-			old_x_list.append(float(x))
-			old_y_list.append(float(y))
-		return old_x_list, old_y_list
-
-	old_x_list, old_y_list = extract_lists('old_throughput.csv')
-
-	new_x_list, new_y_list = extract_lists('new_throughput.csv')
-
-	site_x_list, site_y_list = extract_lists('throughput_from_site.csv')
-
-	font = {'family' : 'normal',
-	        'weight' : 'bold',
-	        'size'   : 22}
-	matplotlib.rc('font', **font)
-	plt.plot(old_x_list,old_y_list,label='old throughput')
-	plt.plot(new_x_list,new_y_list,label='new throughput')
-	plt.plot(site_x_list,site_y_list,label='throughput from site')
-	# plt.rcParams.update({'font.size': 22})
-	# matplotlib.rc('xtick', labelsize=20)
-	# matplotlib.rc('ytick', labelsize=20)
-	plt.xlabel('Time in minutes')
-	plt.ylabel('Normalized values')
-	plt.legend()
-	plt.show()
+	# plt.plot(a,b,label='read size')
+	# plt.plot(e,f,label='old throughput')
+	# plt.plot(c,d,label='new throughput')
+	# plt.plot(g,h,label='throughput from site')
+	# plt.xlabel('Time in minutes')
+	# plt.ylabel('Normalized values')
+	# plt.legend()
+	# plt.show()
 
 if __name__ == '__main__':
-	if True:
-		#one week
-		first_moment, last_moment = 1579264801390, 1579875041000
-	if False:
-		first_moment, last_moment = 1576450800000, 1576537200000
+	first_moment, last_moment = 1579264801390, 1579875041000
 
 	global n_proc
-	n_proc = 7
+	n_proc = 95
 
 	if False:
 		get_throughput_2(first_moment, last_moment, 'cern')
 	if False:
 		get_thp_dump_based_on_interp(first_moment,last_moment)
-	if False:
-		analyse_thp_2()
+
 	if True:
-		plot_throughputs()
+		analyse_thp_2()

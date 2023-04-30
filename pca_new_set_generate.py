@@ -347,6 +347,8 @@ def get_principal_components(input_file_name, output_file_name):
 
 	print(pca_engine.explained_variance_ratio_.cumsum())
 
+	pickle.dump(pca_engine, open('pca_engine.p','wb'))
+
 	exit(0)
 
 	if False:
@@ -1232,10 +1234,10 @@ if __name__ == '__main__':
 	# 	'tm_trend_ars_whole_per_week_4th_june.p',
 	# 	'tm_tren_ars_pc_per_week_4th_june.p'
 	# )
-	# get_principal_components(
-	# 	'tm_thp_ars_whole_per_week_4_may.p',
-	# 	'tm_tren_ars_pc_per_week_4th_june.p'
-	# )
+	get_principal_components(
+		'tm_thp_ars_whole_per_week_4_may.p',
+		'tm_tren_ars_pc_per_week_4th_june.p'
+	)
 	# generate_data_set(
 	# 	'tm_tren_ars_pc_per_week_4th_june.p',
 	# 	'9_4th_June_pc.p'
@@ -1254,4 +1256,4 @@ if __name__ == '__main__':
 
 	# generate_trend_files()
 
-	plot_thp_trend_for_final_report()
+	# plot_thp_trend_for_final_report()

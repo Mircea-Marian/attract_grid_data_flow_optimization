@@ -19,18 +19,13 @@ from tensorflow import keras
 import tensorflow.keras.backend as K
 import tensorflow as tf
 import sys
-
-# Skylate paths
-MATRIXES_FOLDER_LIST = (\
-	'./remote_host_0/log_folder/',\
-	'./remote_host_1/log_folder/',\
-	'./remote_host_1/log_folder/',\
-)
+import data_processing_utils
 
 WEEK_TIME_MOMENTS = (\
 	(1579215600000, 1579875041000),\
 	(1580511600000, 1581289199000),\
-	(1581289200000, 1581980399000),\
+	(1581289200000, 1581670035995),\
+	(1589398710001, 1590609266276),\
 )
 
 UNANSWERED_PATH_TUPLE = (\
@@ -45,6 +40,21 @@ RAW_QUERY_FILES = (\
 	'/data/mipopa/apicommands.log',
 	'/data/mipopa/apicommands2.log',
 	'/data/mipopa/apicommands3.log',
+)
+
+MATRICES_FOLDERS = (\
+	'./matrices_folder/remote_host_0/log_folder',\
+	'./matrices_folder/remote_host_0.5/log_folder',\
+	'./matrices_folder/remote_host_1/log_folder',\
+	'./matrices_folder/log_folder_4_0',\
+	'./matrices_folder/log_folder_4_1',\
+)
+
+TREND_FILE_PATHS = (\
+	'./trend_folder/week_0.p',\
+	'./trend_folder/week_1.p',\
+	'./trend_folder/week_2.p',\
+	'./trend_folder/week_3.p',\
 )
 
 def get_small_encoder_decoder_model_0(arg_dict):
@@ -141,7 +151,7 @@ def get_small_encoder_decoder_model_1(arg_dict):
 			activation='relu')
 	)(x)
 	x = keras.layers.BatchNormalization()(x)
-	# x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
+	x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
 
 	x = keras.layers.Bidirectional(
 		keras.layers.LSTM(
@@ -150,7 +160,7 @@ def get_small_encoder_decoder_model_1(arg_dict):
 		)
 	)(x)
 	x = keras.layers.BatchNormalization()(x)
-	# x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
+	x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
 
 	x = keras.layers.TimeDistributed(
 		keras.layers.Dense(
@@ -158,14 +168,14 @@ def get_small_encoder_decoder_model_1(arg_dict):
 			activation='relu')
 	)(x)
 	x = keras.layers.BatchNormalization()(x)
-	# x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
+	x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
 
 	x = keras.layers.TimeDistributed(
 		keras.layers.Dense(units=5,
 				activation='relu')
 	)(x)
 	x = keras.layers.BatchNormalization()(x)
-	# x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
+	x = keras.layers.Dropout(arg_dict['dropout_value'])(x)
 
 	x = keras.layers.Bidirectional(
 		keras.layers.LSTM(
@@ -848,7 +858,7 @@ def train_main_for_generator_grid_search_0():
 	encoder_decoder_dict['non_split_data_set'] = np.array( encoder_decoder_dict['non_split_data_set'] )
 	data_set_dict['enc_dec_set'] = encoder_decoder_dict
 
-	file = open('econder_decoder_errors.txt','wt')
+	file = open('enconder_decoder_errors.txt','wt')
 
 	file.close()
 
@@ -955,7 +965,7 @@ def dump_encoder_decoder_plot(index):
 	fig = plt.gcf()
 	fig.set_size_inches(11,8)
 
-	if True:
+	if False:
 		encoder_decoder_dict = pickle.load(open(
 			'pca_data_sets/7.p',
 			'rb'
@@ -971,13 +981,23 @@ def dump_encoder_decoder_plot(index):
 			firs_bs_elements_flag=True,
 			one_input_flag=False,
 		)
+		x_set, y_set = generate_random_batch_1(
+			len( encoder_decoder_dict['train_indexes'] )\
+				+ len( encoder_decoder_dict['valid_indexes'] ),
+			40,
+			sorted( encoder_decoder_dict['train_indexes']\
+				+ encoder_decoder_dict['valid_indexes'] ),
+			encoder_decoder_dict,
+			only_last_flag=True,
+			firs_bs_elements_flag=True,
+			one_input_flag=False,
+		)
+
 
 		best_index_path =\
 			get_model_path_by_date(index)
-
-
 		model = keras.models.load_model(best_index_path)
-
+		
 		model.summary()
 
 		print('Best model index at', best_index_path)
@@ -988,28 +1008,35 @@ def dump_encoder_decoder_plot(index):
 
 		predicted_array = predicted_array[1]
 
-		plt.plot(
-			range( y_set[1].shape[0] ),
-			y_set[1][:,0],
-			label='Ground Truth'
+		pickle.dump(
+			( tuple(y_set[1][:,0]) , tuple(predicted_array[:,0]) ),
+			open( 'a.p' , 'wb' )
 		)
 
-		plt.plot(
-			range( predicted_array.shape[0] ),
-			predicted_array[:,0],
-			label='Prediction'
-		)
+		# plt.plot(
+		# 	range( y_set[1].shape[0] ),
+		# 	y_set[1][:,0],
+		# 	label='Ground Truth'
+		# )
 
-		plt.legend()
+		# plt.plot(
+		# 	range( predicted_array.shape[0] ),
+		# 	predicted_array[:,0],
+		# 	label='Prediction'
+		# )
 
-		plt.xlabel('Index in Data Set')
+		# plt.legend()
 
-		plt.ylabel('Normalized Trend')
+		# plt.xlabel('Index in Data Set')
 
-		plt.savefig(
-			'./pca_plots/' + str(index) + '_valid_gt_vs_pred.png'
-		)
-		plt.clf()
+		# plt.ylabel('Normalized Trend')
+
+		# plt.savefig(
+		# 	'./pca_plots/' + str(index) + '_valid_gt_vs_pred.png'
+		# )
+		# plt.clf()
+
+		exit(0)
 
 	loss_gen = csv.reader( open( './pca_csv_folder/losses_' + str(index) + '.csv' , 'rt' ) )
 
@@ -1234,11 +1261,770 @@ def one_time_generator_train():
 		]
 	)
 
+def parse_matrix_per_proc(i):
+	pickle.dump(
+		(
+			matrices_paths_per_week_list[pool_arguments_list[i][0]][pool_arguments_list[i][1]][0],
+			matrices_paths_per_week_list[pool_arguments_list[i][0]][pool_arguments_list[i][1]][1],
+			data_processing_utils.get_dist_dict_by_path(
+				matrices_paths_per_week_list[pool_arguments_list[i][0]][pool_arguments_list[i][1]][2])\
+				if matrices_paths_per_week_list[pool_arguments_list[i][0]][pool_arguments_list[i][1]][1] else\
+				data_processing_utils.get_dem_dict_by_path(\
+				matrices_paths_per_week_list[pool_arguments_list[i][0]][pool_arguments_list[i][1]][2])
+		),
+		open(
+			folder_path\
+				+ str(\
+					dump_index_list[pool_arguments_list[i][0]]
+				)\
+				+ '_' + str(pool_arguments_list[i][1]) + '.p',
+			'wb'
+		)
+	)
+
+def aggregate_and_generate_new_data_set(\
+		window_size=40,\
+		min_se_count=63):
+	'''
+	
+		min_se_count
+			It is used, because there are distance matrices
+			where a client only comunicated with a couple of SEs so
+			those matrices are filtered out.
+
+	'''
+	parse_matrices_indexes =\
+		process_minimal_indexes =\
+		process_whole_matrices_indexes =\
+		process_minimal_indexes = create_set_indexes = tuple()
+
+	previous_parsed_folder = 'parsed_0123/'
+	previous_minimal_set_fn = 'minimal_sets_for_0123.p'
+	previous_whole_matrices = 'whole_for_0123.p'
+
+	next_parsed_folder = 'parsed_0123/'
+	next_minimal_set_fn = 'minimal_sets_for_0123.p'
+	next_whole_matrices = 'whole_for_0123.p'
+
+	ars_dict = dict()
+	if 0 in create_set_indexes\
+		or 1 in create_set_indexes\
+		or 2 in create_set_indexes:
+
+		a = pickle.load( open(\
+			'./read_size_folder/all_queries_read_size.p' , 'rb'
+		) )
+
+		for i in filter(lambda ind: ind < 3, create_set_indexes):
+			ars_dict[i] = a[i]
+	
+	if 3 in create_set_indexes:
+		ars_dict[3] = sorted(pickle.load( open(\
+			'./read_size_folder/rs_per_tm_4.p' , 'rb'
+		) ).items())
+
+	if len(parse_matrices_indexes) > 0:
+		# Parse matrices filenames
+		matrices_fn_list = list(itertools.chain.from_iterable(
+			map(
+				lambda folder_path:\
+					map(\
+						lambda fn: (\
+							int( fn.split('_')[0] ),\
+							'distance' in fn,\
+							folder_path + '/' + fn,\
+						),\
+						os.listdir(folder_path),\
+					),
+				map(
+					lambda a: a[1],
+					filter(
+						lambda p: p[0] in parse_matrices_indexes,
+						enumerate(MATRICES_FOLDERS)
+					)
+				)
+			)
+		))
+
+		# Makes sure there are no duplicates.
+		new_list = list()
+		already_in_list_set = set()
+		for a,b,c in matrices_fn_list:
+			if (a,b) not in already_in_list_set:
+				already_in_list_set.add( (a,b) )
+				new_list.append( (a,b,c) )
+		matrices_fn_list = new_list
+		
+		global matrices_paths_per_week_list
+		matrices_paths_per_week_list =\
+		list(\
+			map(
+				lambda tm_tup:\
+					list(filter(\
+						lambda fn_tup:\
+							tm_tup[0] - 120000 <= fn_tup[0] < tm_tup[1],\
+							matrices_fn_list,\
+					)),
+				map(
+					lambda a: a[1],
+					filter(
+						lambda p: p[0] in parse_matrices_indexes,
+						enumerate(WEEK_TIME_MOMENTS)
+					)
+				)
+			)
+		)
+		
+		for i,l in enumerate(map(lambda e: len(e), matrices_paths_per_week_list)):
+			print('For period',i,'there are',l,'matrices')
+
+		global pool_arguments_list, folder_path
+		pool_arguments_list = list()
+		for i,e in enumerate(matrices_paths_per_week_list):
+			for v in range(len(e)):
+				pool_arguments_list.append((i,v))
+		
+		folder_path = './minimal_sets_and_parsed_matrices/' + next_parsed_folder
+		if not os.path.isdir(folder_path): os.mkdir(folder_path)
+		
+		global dump_index_list
+		dump_index_list = parse_matrices_indexes
+
+		with Pool(126) as p_pool:
+			p_pool.map(\
+				parse_matrix_per_proc,
+				range(sum(map(lambda e: len(e),\
+					matrices_paths_per_week_list)))
+			)
+
+		print('Finished parsing !')
+
+		matrices_paths_per_week_list = list()
+		for _ in range(len(parse_matrices_indexes)):
+			matrices_paths_per_week_list.append(list())
+		for fn in os.listdir(folder_path):
+			matrices_paths_per_week_list[int(fn.split('_')[0])].append(
+				pickle.load(
+					open(
+						folder_path + fn, 'rb'
+					)
+				)
+			)
+
+	if 0 < len(parse_matrices_indexes) < len(WEEK_TIME_MOMENTS):
+		old_folder_path = './minimal_sets_and_parsed_matrices/' + previous_parsed_folder
+		new_folder_path = './minimal_sets_and_parsed_matrices/' + next_parsed_folder
+		for fn in os.listdir( './minimal_sets_and_parsed_matrices/' + previous_parsed_folder ):
+			os.rename(
+				old_folder_path + fn,
+				new_folder_path + fn,
+			)
+		os.rmdir( old_folder_path )
+
+	matrices_paths_per_week_list = list()
+	for _ in range(len(WEEK_TIME_MOMENTS)):
+		matrices_paths_per_week_list.append(list())
+	folder_path = './minimal_sets_and_parsed_matrices/' + next_parsed_folder
+	a = tuple(os.listdir(folder_path))
+	for i,fn in enumerate(a):
+		if(i % 5000 == 0):
+			print('loading matrix:',i,'/',len(a)-1)
+		matrices_paths_per_week_list[int(fn.split('_')[0])].append(
+			pickle.load(
+				open(
+					folder_path + fn, 'rb'
+				)
+			)
+		)
+
+	# add error filtering
+	filtered_per_week_list = list()
+	for week_list in matrices_paths_per_week_list:
+		filtered_per_week_list.append(list())
+
+		for mat_t in week_list:
+			if mat_t[1]:
+				if len( mat_t[2].keys() ) >= min_se_count:
+					se_count_is_valid = True
+					for val in mat_t[2].values():
+						if len(val.keys()) < min_se_count:
+							se_count_is_valid = False
+							break
+					if se_count_is_valid:
+						filtered_per_week_list[-1].append(
+							mat_t
+						)
+			else:
+				if len( mat_t[2].keys() ) >= min_se_count:
+					filtered_per_week_list[-1].append(
+						mat_t
+					)
+	matrices_paths_per_week_list = filtered_per_week_list
+
+	print('Finished loading matrices !')
+
+	for i, week_list in enumerate( matrices_paths_per_week_list ):
+		print('Matrix', i, 'has',\
+			len(tuple(filter(lambda fn_t: fn_t[1],week_list))),\
+			'distance matrices and',
+			len(tuple(filter(lambda fn_t: not fn_t[1],week_list))),\
+			'demotion matrices.'
+		)
+
+	if len( process_minimal_indexes ) != len(WEEK_TIME_MOMENTS):
+		old_minimal_sets = pickle.load(
+			open(
+				'./minimal_sets_and_parsed_matrices/' + previous_minimal_set_fn,
+				'rb'
+			)
+		)
+	
+	if len(process_minimal_indexes) > 0:
+		minimal_clients_list, minimal_se_list =\
+			data_processing_utils.get_clients_and_ses_minimal_list(
+				list(
+					map(
+						lambda week_list:\
+							list(map(
+								lambda a: (a[0],a[2]),
+								filter(
+									lambda fn_tup: fn_tup[1],
+									week_list
+								)
+							)),
+						map(
+							lambda p: p[1],
+							filter(
+								lambda pp: pp[0] in process_minimal_indexes,
+								enumerate(matrices_paths_per_week_list)
+							)
+						)
+					)
+				),
+				list(
+					map(
+						lambda week_list:\
+							list(map(
+								lambda a: (a[0],a[2]),
+								filter(
+									lambda fn_tup: not fn_tup[1],
+									week_list
+								)
+							)),
+						map(
+							lambda p: p[1],
+							filter(
+								lambda pp: pp[0] in process_minimal_indexes,
+								enumerate(matrices_paths_per_week_list)
+							)
+						)
+					)
+				)
+			)
+
+
+		if len( process_minimal_indexes ) != len(WEEK_TIME_MOMENTS):
+			new_cl_list, new_se_list = list(), list()
+			for cl in minimal_clients_list:
+				if cl in old_minimal_sets[0]:
+					new_cl_list.append(cl)
+			for se in minimal_se_list:
+				if se in old_minimal_sets[1]:
+					new_se_list.append(se)
+
+			minimal_clients_list, minimal_se_list =\
+				new_cl_list, new_se_list
+
+
+		pickle.dump(
+			(minimal_clients_list, minimal_se_list,),
+			open( './minimal_sets_and_parsed_matrices/'\
+				+ next_minimal_set_fn , 'wb' )
+		)
+	else:
+		minimal_clients_list, minimal_se_list = old_minimal_sets
+
+	print('# clients:',len(minimal_clients_list))
+	print('# ses:',len(minimal_se_list))
+
+	# if 0 < len(process_minimal_indexes) < len(WEEK_TIME_MOMENTS):
+	# 	os.remove(previous_minimal_set_fn)
+
+	if len(process_whole_matrices_indexes) != len(WEEK_TIME_MOMENTS):
+		whole_matrices_list = pickle.load(
+			open(
+				'./whole_matrices/' + previous_whole_matrices , 'rb'
+			)
+		)
+	else:
+		whole_matrices_list = list()
+
+	if len(process_whole_matrices_indexes) != 0:
+		for week_list in matrices_paths_per_week_list:
+			whole_matrices_list.append(\
+				data_processing_utils.get_complete_distance_matrix_1(
+					list(
+						map(
+							lambda e: (e[0],e[2]),
+							filter(
+								lambda f: f[1],
+								week_list
+							)
+						)
+					),
+					list(
+						map(
+							lambda e: (e[0],e[2]),
+							filter(
+								lambda f: not f[1],
+								week_list
+							)
+						)
+					),	
+					minimal_clients_list,
+					minimal_se_list	
+				)
+			)
+		pickle.dump(
+			whole_matrices_list,
+			open(
+				'./whole_matrices/' + next_whole_matrices,
+				'wb'
+			)
+		)
+
+	if 0 < len(process_minimal_indexes) < len(WEEK_TIME_MOMENTS):
+		os.remove('./whole_matrices/' + previous_whole_matrices)
+
+	print("Finished with the whole matrices !")
+
+	trend_list = list(
+		map(
+			lambda p: pickle.load(open(p,'rb')),
+			TREND_FILE_PATHS
+		)
+	)
+	
+	data_set_dict = dict()
+
+	for i in range(len(create_set_indexes)):
+		ds = data_processing_utils.create_data_set(
+			trend_list[i],
+			ars_dict[i],
+			whole_matrices_list[i],
+		)
+
+		validation_indexes = tuple(random.sample(
+			range( window_size - 1 , len(ds) ),
+			round( 0.2 * len(ds) )
+		))
+
+		data_set_dict[i] =\
+			{
+				"data_set" : ds,
+				"validation_indexes" : validation_indexes,
+				"training_indexes" :\
+					tuple(
+						filter(
+							lambda ind: ind not in validation_indexes,
+							range( window_size - 1 , len(ds) ),
+						)
+					)
+			}
+
+		pickle.dump(
+			data_set_dict[i],
+			open(
+				'./enc_dec_ready_to_train_non_norm/' + str(i) + '.p' , 'wb'
+			)
+		)
+
+def norm_data_sets():
+	data_set_dict = dict()
+	for i in range(len(WEEK_TIME_MOMENTS)):
+		data_set_dict[i] = pickle.load(
+			open(
+				'./enc_dec_ready_to_train_non_norm/' + str(i) + '.p', 'rb'
+			)
+		)
+
+	min_thp = max_thp = data_set_dict[0]["data_set"][0][1]
+
+	min_rs = max_rs = data_set_dict[0]["data_set"][0][2]
+
+	min_comp = min(data_set_dict[0]["data_set"][0][3])
+
+	max_comp = max(data_set_dict[0]["data_set"][0][3])
+
+	for week_list in data_set_dict.values():
+		for t in week_list["data_set"]:
+			if t[1] < min_thp:
+				min_thp = t[1]
+			if t[1] > max_thp:
+				max_thp = t[1]
+
+			if t[2] < min_rs:
+				min_rs = t[2]
+			if t[2] > max_rs:
+				max_rs = t[2]
+
+			for cmp_v in t[3]:
+				if cmp_v < min_comp:
+					min_comp = cmp_v
+				if cmp_v > max_comp:
+					max_comp = cmp_v
+
+	for k, l in data_set_dict.items():
+		pickle.dump(
+			{
+				"data_set" :\
+					tuple(
+						map(
+							lambda p:\
+								[2*(p[2]-min_rs)/(max_rs-min_rs)-1,]\
+								+ list(
+									map(
+										lambda e: 2*(e-min_comp)/(max_comp-min_comp)-1,
+										p[3]
+									)
+								)\
+								+ [(p[1]-min_thp)/(max_thp-min_thp),],
+							l["data_set"]
+						)
+					),
+				"training_indexes" : l['training_indexes'],
+				"validation_indexes": l["validation_indexes"],
+			}
+			,
+			open( './enc_dec_ready_to_train_norm/' + str(k) + '.p' , 'wb' )
+		)
+
+def analyze_minimal_set():
+
+	indexes_to_analyze_tuple = (3,)
+
+	matrices_paths_per_week_list = dict()
+	for ind in indexes_to_analyze_tuple:
+		matrices_paths_per_week_list[ind] = list()
+	folder_path = './minimal_sets_and_parsed_matrices/parsed_0123/'
+	a = tuple(
+			filter(
+				lambda fn_t: fn_t[0] in indexes_to_analyze_tuple,
+				map(
+					lambda fn: (int(fn.split('_')[0]), fn),
+					os.listdir(folder_path)
+				)
+			)
+	)
+	for i,fn_t in enumerate(a):
+		if(i % 5000 == 0):
+			print('loading matrix:',i,'/',len(a)-1)
+		matrices_paths_per_week_list[fn_t[0]].append(
+			pickle.load(
+				open(
+					folder_path + fn_t[1], 'rb'
+				)
+			)
+		)
+
+	for i, week_list in matrices_paths_per_week_list.items():
+		print('Matrix', i, 'has',\
+			len(tuple(filter(lambda fn_t: fn_t[1],week_list))),\
+			'distance matrices and',
+			len(tuple(filter(lambda fn_t: not fn_t[1],week_list))),\
+			'demotion matrices.'
+		)
+
+	matrices_paths_per_week_list = tuple(
+		map(lambda t: t[1],sorted(matrices_paths_per_week_list.items()))
+	)
+
+	# add error filtering
+	if False:
+		filtered_per_week_list = list()
+		for week_list in matrices_paths_per_week_list:
+			filtered_per_week_list.append(list())
+
+			for mat_t in week_list:
+				if mat_t[1]:
+					if len( mat_t[2].keys() ) >= 63:
+						se_count_is_valid = True
+						for val in mat_t[2].values():
+							if len(val.keys()) < 63:
+								se_count_is_valid = False
+								break
+						if se_count_is_valid:
+							filtered_per_week_list[-1].append(
+								mat_t
+							)
+				else:
+					if len( mat_t[2].keys() ) >= 63:
+						filtered_per_week_list[-1].append(
+							mat_t
+						)
+		matrices_paths_per_week_list = filtered_per_week_list
+
+	if False:
+		process_minimal_indexes = (0,1,2,3,)
+
+		minimal_clients_list, minimal_se_list =\
+			data_processing_utils.get_clients_and_ses_minimal_list(
+				list(
+					map(
+						lambda week_list:\
+							list(map(
+								lambda a: (a[0],a[2]),
+								filter(
+									lambda fn_tup: fn_tup[1],
+									week_list
+								)
+							)),
+						map(
+							lambda p: p[1],
+							filter(
+								lambda pp: pp[0] in process_minimal_indexes,
+								enumerate(matrices_paths_per_week_list)
+							)
+						)
+					)
+				),
+				list(
+					map(
+						lambda week_list:\
+							list(map(
+								lambda a: (a[0],a[2]),
+								filter(
+									lambda fn_tup: not fn_tup[1],
+									week_list
+								)
+							)),
+						map(
+							lambda p: p[1],
+							filter(
+								lambda pp: pp[0] in process_minimal_indexes,
+								enumerate(matrices_paths_per_week_list)
+							)
+						)
+					)
+				)
+			)
+
+		print('# clients:',len(minimal_clients_list))
+		print('# ses:',len(minimal_se_list))
+
+	if True:
+		dem_dict = dict()
+		dist_dict = dict()
+		for mat_t in matrices_paths_per_week_list[0]:
+			if not mat_t[1]:
+				a = len(tuple(mat_t[2].items()))
+				if a not in dem_dict:
+					dem_dict[a] = 1
+				else:
+					dem_dict[a] += 1
+			else:
+				for val in mat_t[2].values():
+					a = len(tuple(val.items()))
+					if a not in dist_dict:
+						dist_dict[a] = 1
+					else:
+						dist_dict[a] += 1
+
+		print('Demotion')
+		for k in sorted( dem_dict.keys() ):
+			print('\t',k, dem_dict[k])
+
+		print('Distance')
+		for k in sorted( dist_dict.keys() ):
+			print('\t',k, dist_dict[k])
+
+	if False:
+		for mat_t in matrices_paths_per_week_list[0]:
+			if not mat_t[1]:
+				print(mat_t[2])
+				break
+
+		for mat_t in matrices_paths_per_week_list[1]:
+			if not mat_t[1]:
+				print(mat_t[2])
+				break
+
+def single_multiple_ds_train():
+	ds_list = tuple(
+		map(
+			lambda di: {
+				"validation_indexes" : di["validation_indexes"],
+				"training_indexes" : di["training_indexes"],
+				"data_set" : np.array( di[ "data_set" ] ),
+			},
+			map(
+				lambda i:
+					pickle.load( open('enc_dec_ready_to_train_norm/' + str(i)\
+						+ '.p' , 'rb')),
+				range(len(WEEK_TIME_MOMENTS))
+			)
+		)
+	)
+	training_pairs_tuple =\
+		tuple(
+			itertools.chain.from_iterable(
+				map(
+					lambda d_p: map(\
+							lambda ind: (d_p[0],ind),\
+							d_p[1]['training_indexes']\
+						),
+					enumerate(ds_list)
+				)
+			)
+		)
+	validation_pairs_tuple =\
+		tuple(
+			itertools.chain.from_iterable(
+				map(
+					lambda d_p: map(\
+							lambda ind: (d_p[0],ind),\
+							d_p[1]['validation_indexes']\
+						),
+					enumerate(ds_list)
+				)
+			)
+		)
+
+	def extract_batch(batch_size, ind_tuple):
+		x1 = np.empty( ( batch_size , 40 , 6072 , ) )
+		x2 = np.empty( ( batch_size , 40 , 1 , ) )
+		y2 = np.empty( ( batch_size , 1 , ) )
+		y1 = np.empty( ( batch_size , 40 , 6072 , ) )
+
+		while True:
+			for i, ind_pair in enumerate(random.sample( ind_tuple , batch_size)):
+				x1[i,:,:] = y1[i,:,:] = ds_list[ind_pair[0]]['data_set'][ ind_pair[1] - 39 : ind_pair[1] + 1 , 1:-1 ]
+				x2[i,:,:] = ds_list[ind_pair[0]]['data_set'][ ind_pair[1] - 39 : ind_pair[1] + 1 , :1 ]
+				y2[i,0] = ds_list[ind_pair[0]]['data_set'][ind_pair[1],-1]
+
+			yield ( x2 , x1 ) , ( y1 , y2 )
+
+	model = get_small_encoder_decoder_model_1({
+		'new_index' : 0,
+		'bins_no': 6072,
+		'latent_v_count' : 10,
+		'dropout_value' : 0.1,
+	})
+
+	model.summary()
+
+	model.fit_generator(
+		extract_batch(128,training_pairs_tuple),
+		epochs=100000,
+		steps_per_epoch=142,
+		validation_data=extract_batch(128,validation_pairs_tuple),
+		validation_steps=36,
+		verbose=0,
+		callbacks=[
+			keras.callbacks.CSVLogger(
+				'./pca_csv_folder/losses_386.csv'
+			),
+			keras.callbacks.ModelCheckpoint(
+				"./pca_multiple_model_folders/models_386/model_{epoch:04d}.hdf5",
+				monitor='val_loss',
+				save_best_only=True
+			),
+			keras.callbacks.EarlyStopping(
+				monitor='val_loss',
+				patience=200,
+			),
+		]
+	)
+
+def plot_enc_dec_hist_and_results(index, history_flag, ds_flag):
+	import matplotlib
+	font = {'family' : 'normal',
+	        'weight' : 'bold',
+	        'size'   : 22}
+	matplotlib.rc('font', **font)
+
+	fig = plt.gcf()
+	fig.set_size_inches(11,8)
+	if history_flag:
+		with open( './pca_csv_folder/losses_' + str(index) + '.csv' , 'rt' ) as f_d:
+			csv_r = csv.reader( f_d )
+			l = len(next(csv_r))
+			train_trend_mape_list, train_recons_mape_list, valid_trend_mape_list, valid_recons_mape_list =\
+				list(),list(),list(),list()
+			for line in csv_r:
+				if len(line) == l:
+					train_trend_mape_list.append( float( line[1] ) if float( line[1] ) <= 100 else 100 )
+					train_recons_mape_list.append( float( line[4] ) if float( line[4] ) <= 100 else 100 )
+					valid_trend_mape_list.append( float( line[6] ) if float( line[6] ) <= 100 else 100 )
+					valid_recons_mape_list.append( float( line[9] ) if float( line[9] ) <= 100 else 100 )
+
+			plt.plot( 
+				range( len( train_trend_mape_list ) ),
+				train_trend_mape_list,
+				'r-',
+				label='Train Trend Prediction'
+			)
+
+			plt.plot( 
+				range( len( train_recons_mape_list ) ),
+				train_recons_mape_list,
+				'g-',
+				label='Train Reconstruction'
+			)
+
+			plt.plot( 
+				range( len( valid_trend_mape_list ) ),
+				valid_trend_mape_list,
+				'b-',
+				label='Valid Trend Prediction'
+			)	
+
+			plt.plot( 
+				range( len( valid_recons_mape_list ) ),
+				valid_recons_mape_list,
+				'k-',
+				label='Valid Reconstruction'
+			)
+
+			plt.xlabel('Epoch Index')
+			plt.ylabel("MAPE")
+			plt.legend()
+			plt.savefig('results.png')
+
+def plot_norm_thp():
+	trend_tuple = tuple()
+	for i in range(len(WEEK_TIME_MOMENTS)):
+		trend_tuple += tuple( map( lambda e: e[-1], pickle.load(
+				open( './enc_dec_ready_to_train_norm/' + str(i) + '.p', 'rb' )
+				)["data_set"]))
+
+	import matplotlib
+	font = {'family' : 'normal',
+	        'weight' : 'bold',
+	        'size'   : 22}
+	matplotlib.rc('font', **font)
+
+	fig = plt.gcf()
+	fig.set_size_inches(11,8)
+
+	plt.plot( 
+		range( len( trend_tuple ) ),
+		trend_tuple,
+	)
+
+	plt.savefig('results.png')
+
 if __name__ == '__main__':
 	# train_main_for_generator_grid_search()
 	# with tf.device('/gpu:3'):
 	# for i in range(335, 340):
 	# 	dump_encoder_decoder_plot(i)
-	train_main_for_generator_grid_search_0()
-	# dump_encoder_decoder_plot(335)
+	# train_main_for_generator_grid_search_0()
+	dump_encoder_decoder_plot(335)
 	# test_generator()
+	# aggregate_and_generate_new_data_set()
+	# analyze_minimal_set()
+	# single_multiple_ds_train()
+	# plot_enc_dec_hist_and_results(386, True, False)
+	# plot_norm_thp()
+	# aggregate_and_generate_new_data_set()

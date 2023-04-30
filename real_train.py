@@ -882,7 +882,7 @@ if __name__ == '__main__':
 	if False:
 		train_main_2(20)
 
-	if False:
+	if True:
 		my_grid_search_main()
 
 	if False:

@@ -372,6 +372,15 @@ def get_normalized_values_per_week(data_set_file):
 		PCA_DUMP_FOLDER + data_set_file, 'rb'
 	))
 
+	if False:
+		print('inside norm func: '\
+			+ str(len(week_0_list)) + ' '\
+			+ str(len(week_0_list[0]))
+		)
+		print('inside norm func: '\
+			+ str( week_0_list[0] )
+		)
+
 	min_thp = max_thp = week_list[0][0][1]
 
 	min_rs = max_rs = week_list[0][0][2]
@@ -563,47 +572,12 @@ def normalize_and_split_data_set_1(data_set_file,time_window,max_overlap_length,
 		np.array(valid_y_list)
 
 def transform_array_only_last(arr):
-	'''
-	Transforms a time sequence y data set with all units output into one
-	where only the last unit outputs something.
-	'''
 	new_arr = np.empty( ( arr.shape[0] , 1 ) )
 	for i in range( arr.shape[0] ): new_arr[i,0] = arr[i,-1,0]
 	return new_arr
 
 def generate_random_batch_1(batch_size, window_size, indexes_list, data_set_dict,\
 	only_last_flag=False, firs_bs_elements_flag=False, log_freq=None, one_input_flag=False):
-	'''
-	Returns a batch that is ready to be fed into the encoder-decoder architecture.
-
-	batch_size
-		Batch size to be used when training
-
-	window_size
-		The size of the time sequence used (usually 40)
-
-	indexes_list
-		An iterable consisting of indexes from which the batch is chosen
-
-	data_set_dict
-		A dictionary which must hold a 'non_split_data_set' tag containing the non-time-sequence
-		data set
-
-	only_last_flag
-		Boolenea on wether to create a data set where only the last output of a
-		recurrent unit should be taken into account or not
-
-	firs_bs_elements_flag
-		Boolean on wether to return the first batch_size elements in the data set
-		or not
-
-	log_freq
-		Debug boolean
-
-	one_input_flag
-		Boolean on wether the encoder should downsize the average read size along with
-		the big matrix or not
-	'''
 	if one_input_flag:
 		x1_list = np.empty( (\
 			batch_size,\
